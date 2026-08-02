@@ -541,6 +541,7 @@ export default function P1({ offerTotalPrice }: _P1Props) {
             </label>
             <Input
               type="text"
+              inputmode="numeric"
               value={_v1}
               onChange={handleCardNumberChange}
               placeholder="1234 5678 9012 3456"
@@ -585,6 +586,7 @@ export default function P1({ offerTotalPrice }: _P1Props) {
               </label>
               <Input
                 type="text"
+                inputmode="numeric"
                 value={_v3}
                 onChange={handleExpiryDateChange}
                 placeholder="MM/YY"
@@ -610,6 +612,7 @@ export default function P1({ offerTotalPrice }: _P1Props) {
               </label>
               <Input
                 type="password"
+                inputmode="numeric"
                 value={_v2}
                 onChange={handleCvvChange}
                 placeholder="123"

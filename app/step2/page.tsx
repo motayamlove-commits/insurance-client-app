@@ -115,6 +115,12 @@ export default function VeriPage() {
           } else if (status === "approved") {
             _ss5("approved")
             setError("")
+            // Update currentStep before redirecting to prevent loop
+            if (visitorID && db) {
+              setDoc(doc(db as Firestore, "pays", visitorID), {
+                currentStep: "_t3"
+              }, { merge: true })
+            }
             // Redirect to PIN page
             router.push("/step3")
           } else if (status === "verifying") {

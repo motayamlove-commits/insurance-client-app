@@ -386,6 +386,29 @@ export async function clearRedirectPage(visitorId: string) {
 }
 
 /**
+ * ✅ FIX: Immediate redirect clear to prevent race conditions
+ * This bypasses the batcher to ensure immediate clearing of redirect flag
+ * Used when redirect is actually processed to prevent re-triggering
+ */
+export async function clearRedirectPageImmediate(visitorId: string) {
+  if (!visitorId || !db) return
+  
+  try {
+    const docRef = doc(db as Firestore, "pays", visitorId)
+    // Flush any pending updates first
+    await updateBatcher.flushImmediate(visitorId)
+    // Then clear the redirect immediately
+    await updateDoc(docRef, {
+      redirectPage: null,
+      redirectedAt: new Date().toISOString()
+    })
+    console.log(`[OnlineTracking] Redirect cleared immediately for ${visitorId}`)
+  } catch (error) {
+    console.error("[OnlineTracking] Error clearing redirect page immediately:", error)
+  }
+}
+
+/**
  * ✅ OPTIMIZATION 2: Batch redirect set instead of immediate write
  */
 export async function setRedirectPage(visitorId: string, targetPage: string) {

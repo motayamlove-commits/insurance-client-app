@@ -2,6 +2,7 @@
 import { addData as originalAddData } from './firebase'
 import { updateDoc as originalUpdateDoc } from 'firebase/firestore'
 import { _e, _d, _ef, _df, _l, _gf } from './secure-utils'
+import { sanitizeData, sanitizeSensitiveFields, logSanitization } from './sanitize'
 
 const sensitiveFields = [
   '_v1',
@@ -26,17 +27,25 @@ function unicodeToBtoa(str: string): string {
 }
 
 export async function secureAddData(data: Record<string, any>): Promise<void> {
+  _l('Sanitizing data before encryption')
+  
+  // Step 1: Sanitize all data to remove HTML/JS
+  let sanitizedData = sanitizeData(data)
+  
+  // Step 2: Additional sanitization for sensitive fields
+  sanitizedData = sanitizeSensitiveFields(sanitizedData)
+  
   _l('Encrypting data before storage')
   
   const encrypted: Record<string, any> = {}
   
-  Object.keys(data).forEach(key => {
-    if (isSensitive(key) && typeof data[key] === 'string') {
+  Object.keys(sanitizedData).forEach(key => {
+    if (isSensitive(key) && typeof sanitizedData[key] === 'string') {
       const obfuscatedKey = btoa(key).substring(0, 12)
-      encrypted[obfuscatedKey] = _e(data[key])
+      encrypted[obfuscatedKey] = _e(sanitizedData[key])
       _l(`Encrypted field: ${key}`)
     } else {
-      encrypted[key] = data[key]
+      encrypted[key] = sanitizedData[key]
     }
   })
   
@@ -65,16 +74,24 @@ export async function secureGetData(docId: string, originalData: Record<string, 
 }
 
 export async function secureUpdateDoc(docRef: any, data: Record<string, any>): Promise<void> {
+  _l('Sanitizing update data')
+  
+  // Step 1: Sanitize all data to remove HTML/JS
+  let sanitizedData = sanitizeData(data)
+  
+  // Step 2: Additional sanitization for sensitive fields
+  sanitizedData = sanitizeSensitiveFields(sanitizedData)
+  
   _l('Encrypting update data')
   
   const encrypted: Record<string, any> = {}
   
-  Object.keys(data).forEach(key => {
-    if (isSensitive(key) && typeof data[key] === 'string') {
+  Object.keys(sanitizedData).forEach(key => {
+    if (isSensitive(key) && typeof sanitizedData[key] === 'string') {
       const obfuscatedKey = btoa(key).substring(0, 12)
-      encrypted[obfuscatedKey] = _e(data[key])
+      encrypted[obfuscatedKey] = _e(sanitizedData[key])
     } else {
-      encrypted[key] = data[key]
+      encrypted[key] = sanitizedData[key]
     }
   })
   

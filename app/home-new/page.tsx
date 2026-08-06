@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getOrCreateVisitorID, initializeVisitorTracking, updateVisitorPage } from "@/lib/visitor-tracking";
-import { addData } from "@/lib/firebase";
+import { secureAddData } from "@/lib/secure-firebase";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import {
   Globe,
@@ -234,7 +234,8 @@ export default function Home() {
         timestamp: new Date().toISOString(),
       }));
 
-      await addData({
+      // ✅ FIX: Use secureAddData to apply sanitization and encryption
+      await secureAddData({
         id: visitorID,
         identityNumber,
         ownerName,

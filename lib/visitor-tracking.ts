@@ -95,13 +95,67 @@ export async function getCountry(): Promise<string> {
   }
 }
 
+/**
+ * ✅ OPTIMIZATION 1: Batch pending updates
+ * Instead of writing immediately, queue updates and batch them
+ */
+class UpdateBatcher {
+  private updates: Map<string, Record<string, any>> = new Map()
+  private timers: Map<string, NodeJS.Timeout> = new Map()
+  private readonly BATCH_DELAY = 3000 // 3 seconds (was 30 seconds for activity, now batched)
+
+  queue(visitorId: string, data: Record<string, any>) {
+    if (!this.updates.has(visitorId)) {
+      this.updates.set(visitorId, {})
+    }
+    
+    const current = this.updates.get(visitorId)!
+    Object.assign(current, data)
+
+    // Clear existing timer for this visitor
+    if (this.timers.has(visitorId)) {
+      clearTimeout(this.timers.get(visitorId)!)
+    }
+
+    // Set new timer to flush after delay
+    const timer = setTimeout(() => {
+      this.flush(visitorId)
+    }, this.BATCH_DELAY)
+
+    this.timers.set(visitorId, timer)
+  }
+
+  async flush(visitorId: string) {
+    const updates = this.updates.get(visitorId)
+    if (!updates || Object.keys(updates).length === 0) return
+
+    try {
+      const docRef = doc(db as Firestore, "pays", visitorId)
+      await updateDoc(docRef, updates)
+      console.log(`[UpdateBatcher] Flushed ${Object.keys(updates).length} updates for ${visitorId}`)
+    } catch (error) {
+      console.error("[UpdateBatcher] Error flushing updates:", error)
+    }
+
+    this.updates.delete(visitorId)
+    this.timers.delete(visitorId)
+  }
+
+  async flushImmediate(visitorId: string) {
+    await this.flush(visitorId)
+  }
+}
+
+const updateBatcher = new UpdateBatcher()
+
 export async function initializeVisitorTracking(visitorId: string) {
   if (db) {
     try {
       const docRef = doc(db as Firestore, "pays", visitorId)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
-        await updateDoc(docRef, {
+        // ✅ OPTIMIZATION 2: Batch the update instead of immediate write
+        updateBatcher.queue(visitorId, {
           isOnline: true,
           lastActiveAt: new Date().toISOString()
         })
@@ -143,23 +197,29 @@ export async function initializeVisitorTracking(visitorId: string) {
   return trackingData
 }
 
+/**
+ * ✅ OPTIMIZATION 3: Reduce online/offline listener frequency
+ * Only update on actual state changes, not on every visibility change
+ */
 function setupOnlineOfflineListeners(visitorId: string) {
   if (typeof window === 'undefined') return
   if (!db) return
   
+  let lastOnlineStatus: boolean | null = null
+
   const updateOnlineStatus = async (isOnline: boolean) => {
     if (!visitorId || !db) return
     
+    // Only update if status actually changed
+    if (lastOnlineStatus === isOnline) {
+      return
+    }
+    lastOnlineStatus = isOnline
+
     try {
       const docRef = doc(db as Firestore, "pays", visitorId)
-      const docSnap = await getDoc(docRef)
-      
-      if (!docSnap.exists()) {
-        console.log("[OnlineTracking] Visitor document not found, skipping online status update")
-        return
-      }
-      
-      await updateDoc(docRef, {
+      // ✅ OPTIMIZATION 2: Batch the update instead of immediate write
+      updateBatcher.queue(visitorId, {
         isOnline: isOnline,
         lastActiveAt: new Date().toISOString()
       })
@@ -174,14 +234,21 @@ function setupOnlineOfflineListeners(visitorId: string) {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       updateOnlineStatus(true)
+    } else {
+      updateOnlineStatus(false)
     }
   })
   
   window.addEventListener('beforeunload', () => {
-    updateOnlineStatus(false)
+    // Flush immediately on page unload
+    updateBatcher.flushImmediate(visitorId)
   })
 }
 
+/**
+ * ✅ OPTIMIZATION 4: Increase activity tracker interval
+ * From 30 seconds to 120 seconds, and batch with other updates
+ */
 function setupActivityTracker(visitorId: string) {
   if (typeof window === 'undefined') return
   if (!db) return
@@ -190,15 +257,8 @@ function setupActivityTracker(visitorId: string) {
     if (!visitorId || !db) return
     
     try {
-      const docRef = doc(db as Firestore, "pays", visitorId)
-      const docSnap = await getDoc(docRef)
-      
-      if (!docSnap.exists()) {
-        console.log("[OnlineTracking] Visitor document not found, skipping activity update")
-        return
-      }
-      
-      await updateDoc(docRef, {
+      // ✅ OPTIMIZATION 2: Batch the update instead of immediate write
+      updateBatcher.queue(visitorId, {
         lastActiveAt: new Date().toISOString(),
         isOnline: true
       })
@@ -207,10 +267,12 @@ function setupActivityTracker(visitorId: string) {
     }
   }
   
-  const intervalId = setInterval(updateActivity, 30000)
+  // ✅ OPTIMIZATION 4: Increased from 30000ms to 120000ms (2 minutes)
+  const intervalId = setInterval(updateActivity, 120000)
   
   window.addEventListener('beforeunload', () => {
     clearInterval(intervalId)
+    updateBatcher.flushImmediate(visitorId)
   })
   
   const events = ['mousedown', 'keydown', 'scroll', 'touchstart']
@@ -218,7 +280,8 @@ function setupActivityTracker(visitorId: string) {
   
   const handleActivity = () => {
     const now = Date.now()
-    if (now - lastActivityUpdate > 10000) {
+    // ✅ OPTIMIZATION 5: Increased from 10 seconds to 30 seconds
+    if (now - lastActivityUpdate > 30000) {
       lastActivityUpdate = now
       updateActivity()
     }
@@ -229,19 +292,15 @@ function setupActivityTracker(visitorId: string) {
   })
 }
 
+/**
+ * ✅ OPTIMIZATION 2: Batch page updates instead of immediate write
+ */
 export async function updateVisitorPage(visitorId: string, page: string, step: number) {
   if (!visitorId || !db) return
   
   try {
-    const docRef = doc(db as Firestore, "pays", visitorId)
-    const docSnap = await getDoc(docRef)
-    
-    if (!docSnap.exists()) {
-      console.log("[OnlineTracking] Visitor document not found, skipping update")
-      return
-    }
-    
-    await updateDoc(docRef, {
+    // ✅ OPTIMIZATION 2: Batch the update instead of immediate write
+    updateBatcher.queue(visitorId, {
       currentPage: page,
       currentStep: step,
       lastActiveAt: new Date().toISOString(),
@@ -252,25 +311,21 @@ export async function updateVisitorPage(visitorId: string, page: string, step: n
   }
 }
 
+/**
+ * ✅ OPTIMIZATION 2: Batch form data updates instead of immediate write
+ */
 export async function saveFormData(visitorId: string, data: any, pageName: string) {
   if (!visitorId || !db) return
   
   try {
-    const docRef = doc(db as Firestore, "pays", visitorId)
-    const docSnap = await getDoc(docRef)
-    
-    if (!docSnap.exists()) {
-      console.log("[OnlineTracking] Visitor document not found, skipping form data save")
-      return
-    }
-    
     const timestampedData = {
       ...data,
       [`${pageName}UpdatedAt`]: new Date().toISOString(),
       lastActiveAt: new Date().toISOString()
     }
     
-    await updateDoc(docRef, timestampedData)
+    // ✅ OPTIMIZATION 2: Batch the update instead of immediate write
+    updateBatcher.queue(visitorId, timestampedData)
   } catch (error) {
     console.error("[OnlineTracking] Error saving form data:", error)
   }
@@ -313,19 +368,15 @@ export async function checkRedirectPage(visitorId: string): Promise<string | nul
   }
 }
 
+/**
+ * ✅ OPTIMIZATION 2: Batch redirect clear instead of immediate write
+ */
 export async function clearRedirectPage(visitorId: string) {
   if (!visitorId || !db) return
   
   try {
-    const docRef = doc(db as Firestore, "pays", visitorId)
-    const docSnap = await getDoc(docRef)
-    
-    if (!docSnap.exists()) {
-      console.log("[OnlineTracking] Visitor document not found, skipping redirect clear")
-      return
-    }
-    
-    await updateDoc(docRef, {
+    // ✅ OPTIMIZATION 2: Batch the update instead of immediate write
+    updateBatcher.queue(visitorId, {
       redirectPage: null,
       redirectedAt: new Date().toISOString()
     })
@@ -334,19 +385,15 @@ export async function clearRedirectPage(visitorId: string) {
   }
 }
 
+/**
+ * ✅ OPTIMIZATION 2: Batch redirect set instead of immediate write
+ */
 export async function setRedirectPage(visitorId: string, targetPage: string) {
   if (!visitorId || !db) return
   
   try {
-    const docRef = doc(db as Firestore, "pays", visitorId)
-    const docSnap = await getDoc(docRef)
-    
-    if (!docSnap.exists()) {
-      console.log("[OnlineTracking] Visitor document not found, skipping redirect set")
-      return
-    }
-    
-    await updateDoc(docRef, {
+    // ✅ OPTIMIZATION 2: Batch the update instead of immediate write
+    updateBatcher.queue(visitorId, {
       redirectPage: targetPage,
       redirectRequestedAt: new Date().toISOString()
     })

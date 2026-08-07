@@ -1,9 +1,14 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 export function LegalFooter() {
-  const currentYear = new Date().getFullYear();
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
 
   return (
     <footer className="bg-[#0a4a68] text-white" dir="rtl">
@@ -12,9 +17,9 @@ export function LegalFooter() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
           {/* Brand */}
           <div className="text-center md:text-right">
-            <img src="https://bcare.com.sa/assets/images/logo-bacre-white.svg" />{" "}
+            <img src="https://bcare.com.sa/assets/images/logo-bacre-white.svg" alt="Logo" />
             <p className="text-gray-300 text-xs">
-              © {currentYear} جميع الحقوق محفوظة
+              © {currentYear ?? new Date().getFullYear()} جميع الحقوق محفوظة
             </p>
           </div>
 

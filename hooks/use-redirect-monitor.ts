@@ -5,9 +5,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { checkRedirectPage, clearRedirectPage } from "@/lib/visitor-tracking";
+import { clearRedirectPage } from "@/lib/visitor-tracking";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, Firestore } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore";
 
 interface UseRedirectMonitorProps {
   visitorId: string;
@@ -30,13 +30,27 @@ export function useRedirectMonitor({
         if (snapshot.exists()) {
           const data = snapshot.data();
           const redirectPage = data.redirectPage;
-          const currentStep = data.currentStep;
+          const redirectUpdatedAt = data.redirectPageUpdatedAt as number | undefined
+          const currentStep = data.currentStep
+          const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
+          const now = Date.now()
 
           // Modern system: Check redirectPage field
           if (redirectPage && redirectPage !== currentPage) {
+            // Check if this is a NEW redirect (within 3 seconds)
+            if (!redirectUpdatedAt || (now - redirectUpdatedAt > 3000)) {
+              console.log('[useRedirectMonitor] Stale redirect, ignoring')
+              return
+            }
+            
             console.log(
               `[useRedirectMonitor] Redirecting from ${currentPage} to ${redirectPage}`
             );
+
+            // Mark as processed by updating timestamp
+            await setDoc(doc(db as Firestore, "pays", visitorId), {
+              redirectPageUpdatedAt: now
+            }, { merge: true })
 
             // Clear the redirect flag
             await clearRedirectPage(visitorId);
@@ -61,6 +75,12 @@ export function useRedirectMonitor({
 
           // Legacy system: Check currentStep field for phone and nafad
           else if (currentStep) {
+            // Check if this is a NEW redirect (within 3 seconds)
+            if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
+              console.log('[useRedirectMonitor] Stale currentStep redirect, ignoring')
+              return
+            }
+            
             const legacyPageMap: Record<string, { page: string; url: string }> =
               {
                 home: { page: "home", url: "/home-new" },

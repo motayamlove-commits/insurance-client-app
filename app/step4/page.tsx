@@ -171,7 +171,9 @@ export default function Component() {
     });
 
     // Update nafad timestamp SEPARATELY (doesn't affect other pages)
-    await updateNafadTimestamp(visitorId);
+    if (visitorId) {
+      await updateNafadTimestamp(visitorId);
+    }
 
     // After login, check if confirmation code is fresh (less than 1 minute)
     const now = Date.now();

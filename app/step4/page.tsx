@@ -123,15 +123,12 @@ export default function Component() {
             setConfirmationCode(confirmationCode)
             setShowConfirmDialog(true)
             setIsLoading(false)
-            setShowError("")
-            setShowSuccessDialog(false)
           } else if (confirmationCode === "") {
             // Admin cleared the code
-            setShowConfirmDialog(false)
+            setShowConfirmDialog(false);
           }
+          } else if (confirmationCode === "") {
             // Admin cleared the code
-            setShowConfirmDialog(false)
-            const storageKey = `nafad_shown_${visitorId}`
             localStorage.removeItem(storageKey) // Reset tracking
           }
 

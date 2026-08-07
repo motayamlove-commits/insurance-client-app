@@ -3,12 +3,12 @@ import { getDatabase, Database } from "firebase/database";
 import { doc, getFirestore, setDoc, Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDLj7Vhfu48SA0CcYX-4v1bNw4yJ5IlQH4",
-  authDomain: "test-b-care.firebaseapp.com",
-  projectId: "test-b-care",
-  storageBucket: "test-b-care.firebasestorage.app",
-  messagingSenderId: "153641116643",
-  appId: "1:153641116643:web:3e3ecb24a86dd63c6df6d6"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || ""
 };
 
 const isFirebaseConfigured = Boolean(

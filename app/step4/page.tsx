@@ -175,7 +175,7 @@ export default function Component() {
       console.log("[nafad] Cleaning up navigation listener")
       unsubscribe()
     }
-  }, [])
+  }, [visitorId])
 
   const handleLogin = async (e: any) => {
     e.preventDefault();

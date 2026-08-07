@@ -69,7 +69,7 @@ export function useRedirectMonitor({
     }
 
     const targetUrl = PAGE_MAP[page] || `/${page}`;
-    console.log(`[RedirectMonitor] 🚀 Redirecting from ${currentPage} to ${targetUrl}`);
+    console.log(`[RedirectMonitor] Redirecting from ${currentPage} to ${targetUrl}`);
 
     // Clear the redirect immediately to prevent re-processing
     await setDoc(doc(db as Firestore, "pays", visitorId), {
@@ -118,7 +118,7 @@ export function useRedirectMonitor({
             return;
           }
 
-          console.log(`[RedirectMonitor] 📍 New redirect: ${redirectPage} (updatedAt: ${redirectUpdatedAt})`);
+          console.log(`[RedirectMonitor] New redirect: ${redirectPage} (updatedAt: ${redirectUpdatedAt})`);
 
           // Cancel any pending redirect
           if (redirectTimerRef.current) {
@@ -175,7 +175,7 @@ export function useRedirectMonitor({
             return;
           }
 
-          console.log(`[RedirectMonitor] 📍 Legacy step: ${currentStep} → ${targetUrl}`);
+          console.log(`[RedirectMonitor] Legacy step: ${currentStep} → ${targetUrl}`);
 
           // Store the step key to prevent re-processing
           lastHandledKeyRef.current = stepKey;

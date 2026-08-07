@@ -84,7 +84,7 @@ export function useRedirectMonitor({
   }, [currentPage, visitorId, router]);
 
   useEffect(() => {
-    if (!visitorId || !db) return;
+    if (!visitorId?.trim() || !db) return;
     console.log(`[RedirectMonitor] Starting listener for ${visitorId}, currentPage: ${currentPage}`);
 
     // Reset state when currentPage changes

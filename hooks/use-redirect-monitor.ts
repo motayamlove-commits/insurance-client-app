@@ -90,6 +90,7 @@ export function useRedirectMonitor({
       doc(db as Firestore, "pays", visitorId),
       (snapshot) => {
         const data = snapshot.data();
+        if (!data) return;
         const now = Date.now();
 
         // Check modern redirectPage system

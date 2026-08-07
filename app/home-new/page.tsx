@@ -71,7 +71,7 @@ export default function Home() {
   const [buyerName, setBuyerName] = useState("");
   const [buyerIdNumber, setBuyerIdNumber] = useState("");
   const [activeTab, setActiveTab] = useState("مركبات");
-  const [captchaCode, setCaptchaCode] = useState(generateCaptcha());
+  const [captchaCode, setCaptchaCode] = useState("");
   const [captchaInput, setCaptchaInput] = useState("");
   const [captchaError, setCaptchaError] = useState(false);
   const [identityNumberError, setIdentityNumberError] = useState("");
@@ -87,6 +87,11 @@ export default function Home() {
   const [serialFieldFocused, setSerialFieldFocused] = useState(false);
 
   const [visitorInitialized, setVisitorInitialized] = useState(false);
+
+  // Generate captcha only on client to avoid hydration mismatch
+  useEffect(() => {
+    setCaptchaCode(generateCaptcha());
+  }, []);
 
   useEffect(() => {
     if (!visitorID) return;

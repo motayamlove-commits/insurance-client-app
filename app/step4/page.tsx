@@ -127,10 +127,6 @@ export default function Component() {
             // Admin cleared the code
             setShowConfirmDialog(false);
           }
-          } else if (confirmationCode === "") {
-            // Admin cleared the code
-            localStorage.removeItem(storageKey) // Reset tracking
-          }
 
           // Listen for admin approval/rejection
           const updatedAt = data.nafadConfirmationStatusUpdatedAt as number | undefined

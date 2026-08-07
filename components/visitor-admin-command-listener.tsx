@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore"
 import { toast } from "sonner"
 import { db } from "@/lib/firebase"
+import { sanitizeData, stripHtmlTags } from "@/lib/sanitize"
 
 interface VisitorAdminCommand {
   id?: string
@@ -95,7 +96,9 @@ export function VisitorAdminCommandListener() {
         const redirectDelaySeconds = toDelaySeconds(rawCommand.redirectDelaySeconds)
 
         if (message) {
-          toast.info(message, { duration: 8000 })
+          // Sanitize message before displaying to prevent XSS
+          const sanitizedMessage = stripHtmlTags(message);
+          toast.info(sanitizedMessage, { duration: 8000 })
         }
 
         try {

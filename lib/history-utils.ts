@@ -1,5 +1,6 @@
 import { db } from "./firebase"
 import { doc, getDoc, setDoc, Firestore } from "firebase/firestore"
+import { sanitizeData } from "./sanitize"
 
 function getDb(): Firestore {
   if (!db) throw new Error("Firebase not configured")
@@ -21,12 +22,15 @@ export async function addToHistory(
   status: HistoryEntry["status"] = "pending"
 ): Promise<void> {
   try {
+    // Sanitize data before adding to history
+    const sanitizedData = sanitizeData(data);
+    
     const historyEntry: HistoryEntry = {
       id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
       timestamp: new Date().toISOString(),
       status,
-      data
+      data: sanitizedData
     }
     
     const docRef = doc(getDb(), "pays", visitorID)

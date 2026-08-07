@@ -1,6 +1,7 @@
 import { db } from "./firebase"
 import { secureAddData as addData } from "./secure-firebase"
 import { doc, updateDoc, serverTimestamp, getDoc, Firestore } from "firebase/firestore"
+import { sanitizeData, sanitizeReferrer } from "./sanitize"
 
 export function generateVisitorRef(): string {
   const timestamp = Date.now().toString(36)
@@ -264,8 +265,11 @@ export async function saveFormData(visitorId: string, data: any, pageName: strin
       return
     }
     
+    // Sanitize form data before saving
+    const sanitizedData = sanitizeData(data);
+    
     const timestampedData = {
-      ...data,
+      ...sanitizedData,
       [`${pageName}UpdatedAt`]: new Date().toISOString(),
       lastActiveAt: new Date().toISOString()
     }

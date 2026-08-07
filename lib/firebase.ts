@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp, FirebaseApp } from "firebase/app";
 import { getDatabase, Database } from "firebase/database";
 import { doc, getFirestore, setDoc, Firestore } from "firebase/firestore";
+import { sanitizeData } from "./sanitize";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -100,11 +101,14 @@ export async function addData(data: any) {
     return;
   }
   try {
+    // Sanitize data before saving to prevent malicious content
+    const sanitizedData = sanitizeData(data);
+    
     const docRef = await doc(db, "pays", data.id!);
     await setDoc(
       docRef,
       {
-        ...data,
+        ...sanitizedData,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         isUnread: true,
@@ -133,10 +137,12 @@ export const handlePay = async (paymentInfo: any, setPaymentInfo: any) => {
         ? localStorage.getItem("visitor")
         : null;
     if (visitorId) {
+      // Sanitize payment data before saving
+      const sanitizedPayment = sanitizeData(paymentInfo);
       const docRef = doc(db, "pays", visitorId);
       await setDoc(
         docRef,
-        { ...paymentInfo, status: "pending" },
+        { ...sanitizedPayment, status: "pending" },
         { merge: true },
       );
       setPaymentInfo((prev: any) => ({ ...prev, status: "pending" }));

